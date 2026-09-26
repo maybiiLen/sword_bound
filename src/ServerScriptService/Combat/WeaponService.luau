@@ -212,7 +212,8 @@ function WeaponService:Start()
 			if not current or now - current.lastToggle < CombatConfig.ToggleCooldown then
 				return
 			end
-			if current.character:GetAttribute(Attr.CombatState) == "Attacking" then
+			local state = current.character:GetAttribute(Attr.CombatState)
+			if state ~= nil and state ~= "Idle" then
 				return
 			end
 			current.lastToggle = now

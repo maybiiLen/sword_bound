@@ -5,17 +5,26 @@
 		local Types = require(ReplicatedStorage.Combat.Types)
 		local def: Types.WeaponDefinition = ...
 
+	Timing (when the blade can hit, when you can cancel) is NOT here: it comes from the
+	animation's markers in Combat.Animations.Specs, so animation and gameplay can't drift apart.
 	See Docs.Combat > "Adding a new sword" for what each field means.
 ]]
 
 export type AttackDefinition = {
-	Animation: string, -- R15 animation id
-	AnimationR6: string?, -- optional R6 animation id
-	Duration: number, -- seconds; the animation is sped up or slowed down to fit
-	DamageMultiplier: number,
-	HitWindow: { number }, -- { start, end } as fractions of Duration (0-1); server validates hits against this
-	UseMarkers: boolean?, -- true: the animation's "HitStart"/"HitEnd" markers open/close the hitbox instead
+	Animation: string, -- AnimationLibrary name, e.g. "Light1" (markers: HitStart, HitEnd, CancelOpen, Lunge)
+	DamageMultiplier: number, -- x weapon Damage
+	StaminaCost: number,
+	PoiseDamage: number, -- breaks the target's poise (stagger) when it reaches 0
+	Weight: string, -- "Light" | "Heavy": hit-stop and camera shake strength (CombatConfig.HitStop/Shake)
+	Lunge: number?, -- x CombatConfig.LungeSpeed forward push on the "Lunge" marker (0/nil = none)
+	HyperArmor: boolean?, -- true: taking a hit doesn't flinch you out of this attack (poise break still does)
 	Sound: string?, -- Sound name in Combat.Assets.Sounds played at swing start
+}
+
+export type HeavyDefinition = AttackDefinition & {
+	ChargeAnimation: string, -- looping pose while holding the attack button
+	FullChargeDamageBonus: number, -- extra DamageMultiplier fraction at full charge (0.5 = +50%)
+	FullChargePoiseBonus: number,
 }
 
 export type WeaponDefinition = {
@@ -25,10 +34,12 @@ export type WeaponDefinition = {
 	Model: string, -- model name in Combat.Assets.WeaponModels
 	Damage: number,
 	Reach: number, -- studs from the wielder's root part the weapon can hit
-	Combo: { AttackDefinition },
-	ComboResetTime: number, -- seconds after a swing before the combo restarts at step 1
-	IdleAnimation: string?, -- held pose while drawn (R15)
-	IdleAnimationR6: string?,
+	Combo: { AttackDefinition }, -- light attacks, chained by tapping attack
+	Heavy: HeavyDefinition, -- hold attack to charge, release to swing
+	ComboResetTime: number, -- seconds after a light attack ends before the combo restarts at 1
+	BlockStability: number, -- 0..1, higher = less stamina lost per blocked hit
+	IdleAnimation: string, -- drawn guard pose (AnimationLibrary name)
+	BlockAnimation: string, -- looping block pose
 	Skills: { any }, -- reserved for Sword Skills
 }
 

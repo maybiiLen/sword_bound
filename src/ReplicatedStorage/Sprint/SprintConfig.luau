@@ -8,11 +8,11 @@ local SprintConfig = {
 	WalkSpeed = 16,
 	SprintSpeed = 26,
 
-	-- Stamina (units per second)
+	-- Stamina (units per second). The pool is shared with combat (Combat.StaminaService).
 	MaxStamina = 100,
 	DrainRate = 18,
-	RegenRate = 24,
-	RegenDelay = 1.0, -- seconds after sprinting stops before regen begins
+	RegenRate = 32,
+	RegenDelay = 0.8, -- seconds after the last spend (sprint, attack, roll, block) before regen begins
 	MinStaminaToSprint = 25, -- after exhaustion, stamina must recover to this before sprinting again
 	MinMoveSpeed = 2, -- horizontal studs/s below which sprinting does not drain stamina
 
@@ -40,6 +40,7 @@ local SprintConfig = {
 		Sprinting = "Sprinting",
 		Exhausted = "Exhausted",
 		Blocked = "SprintBlocked", -- set true from any server script (e.g. while attacking) to prevent sprinting
+		SpeedMultiplier = "MoveSpeedMultiplier", -- x WalkSpeed; combat sets it during attacks, blocks and rolls
 	},
 }
 

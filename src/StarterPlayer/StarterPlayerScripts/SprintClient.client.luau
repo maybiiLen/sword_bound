@@ -123,12 +123,16 @@ local function setBarVisible(visible: boolean)
 end
 
 local function applySprinting(sprinting: boolean)
-	if predictedSprinting == sprinting then
+	predictedSprinting = sprinting
+	local hum = humanoid
+	if not hum or not character then
 		return
 	end
-	predictedSprinting = sprinting
-	if humanoid then
-		humanoid.WalkSpeed = if sprinting then Config.SprintSpeed else Config.WalkSpeed
+	local multiplier = character:GetAttribute(Attr.SpeedMultiplier)
+	local speed = (if sprinting then Config.SprintSpeed else Config.WalkSpeed)
+		* (if typeof(multiplier) == "number" then multiplier else 1)
+	if hum.WalkSpeed ~= speed then
+		hum.WalkSpeed = speed
 	end
 end
 

@@ -1,24 +1,28 @@
 --[[
 	BaseWeapon  (client behavior base class)
-	Everything every weapon type shares: loading its animations for the rig (R15/R6), the
-	drawn idle pose, playing one attack of the combo at the definition's Duration, and
-	opening/closing the hit window (from "HitStart"/"HitEnd" animation markers when the attack
-	has UseMarkers, otherwise from its HitWindow fractions).
+	Everything every weapon type shares: the drawn guard pose, the block pose, the heavy charge
+	pose, and playing one attack with its timeline. The timeline (hit window open/close, Lunge,
+	CancelOpen, end) is driven from the attack animation's markers in Animations.Specs, measured
+	on the track's own clock, so hit-stop (slowing the track) delays everything consistently.
 
-	It does NOT decide when to attack; that's WeaponController's combo state machine.
+	It does NOT decide when to attack; that's WeaponController's state machine.
 	It does NOT deal damage; it reports hits to the server with :ReportHit().
 
 	Subclass hooks (override only what differs; see WeaponBehaviors.Sword):
 		:OnDrawnChanged(drawn)
-		:OnAttackStart(step, attack)
-		:OnHitWindowOpen(step, attack)
-		:OnHitWindowClose(step, attack)
-		:OnAttackEnd(step, attack)
+		:OnAttackStart(attack)
+		:OnHitWindowOpen(attack)
+		:OnHitWindowClose(attack)
+		:OnAttackEnd(attack)
 
 	API (used by WeaponController):
-		BaseWeapon.new(definition, character, model) -> weapon
+		BaseWeapon.new(definition, character, model, animationSet) -> weapon
 		weapon:SetDrawn(drawn)
-		weapon:Attack(step) -> duration
+		weapon:SetBlocking(blocking)
+		weapon:StartCharge() / weapon:StopCharge()
+		weapon:PlayAttack(attack, callbacks?) -> AnimationTrack?
+			callbacks: { Lunge, HitStart, HitEnd, CancelOpen, Ended } (all optional functions)
+		weapon:GetAttackTrack() -> AnimationTrack?
 		weapon:CancelAttack()
 		weapon:ReportHit(targetModel, position)
 		weapon:Destroy()
@@ -32,65 +36,34 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ContentProvider = game:GetService("ContentProvider")
+local RunService = game:GetService("RunService")
 
 local Trove = require(ReplicatedStorage.Shared.Util.Trove)
+local AnimationLibrary = require(ReplicatedStorage.Combat.Animations.AnimationLibrary)
 
 local HitRemote = ReplicatedStorage.Combat.Remotes.HitRemote
 
-local IDLE_PRIORITY = Enum.AnimationPriority.Action
-local ATTACK_PRIORITY = Enum.AnimationPriority.Action2
+local MARKER_ORDER = { "Lunge", "HitStart", "HitEnd", "CancelOpen" }
 
 local BaseWeapon = {}
 BaseWeapon.__index = BaseWeapon
 
-local function loadTrack(animator: Animator, id: string?, priority: Enum.AnimationPriority, looped: boolean, trove): AnimationTrack?
-	if not id or id == "" then
-		return nil
-	end
-	local animation = trove:Add(Instance.new("Animation"))
-	animation.AnimationId = id
-	local track = animator:LoadAnimation(animation)
-	track.Priority = priority
-	track.Looped = looped
-	trove:Add(function()
-		track:Stop(0)
-		track:Destroy()
-	end)
-	return track
-end
-
-function BaseWeapon.new(definition, character: Model, model: Model)
+function BaseWeapon.new(definition, character: Model, model: Model, animationSet)
 	local self = setmetatable({}, BaseWeapon)
 	self.Definition = definition
 	self.Character = character
 	self.Model = model
-	self.Humanoid = character:FindFirstChildOfClass("Humanoid") :: Humanoid
+	self.Anims = animationSet
 	self.Drawn = false
+	self.Blocking = false
 	self.Trove = Trove.new()
-	self._attackToken = 0
-	self._currentStep = nil :: number?
+	self._attack = nil
 
-	local animator = self.Humanoid:FindFirstChildOfClass("Animator") :: Animator
-	local isR6 = self.Humanoid.RigType == Enum.HumanoidRigType.R6
-	local function pick(r15: string?, r6: string?)
-		return if isR6 then (r6 or r15) else r15
+	local names = { definition.IdleAnimation, definition.BlockAnimation, definition.Heavy.ChargeAnimation, definition.Heavy.Animation }
+	for _, attack in definition.Combo do
+		table.insert(names, attack.Animation)
 	end
-
-	self.IdleTrack = loadTrack(animator, pick(definition.IdleAnimation, definition.IdleAnimationR6), IDLE_PRIORITY, true, self.Trove)
-	self.ComboTracks = {} :: { AnimationTrack }
-	for index, attack in definition.Combo do
-		self.ComboTracks[index] = loadTrack(animator, pick(attack.Animation, attack.AnimationR6), ATTACK_PRIORITY, false, self.Trove) :: AnimationTrack
-	end
-
-	task.spawn(function()
-		local toPreload = {}
-		for _, track in self.ComboTracks do
-			table.insert(toPreload, track.Animation)
-		end
-		pcall(ContentProvider.PreloadAsync, ContentProvider, toPreload)
-	end)
-
+	animationSet:Preload(names)
 	return self
 end
 
@@ -99,93 +72,124 @@ function BaseWeapon:SetDrawn(drawn: boolean)
 		return
 	end
 	self.Drawn = drawn
-	if not drawn then
+	if drawn then
+		self.Anims:Play(self.Definition.IdleAnimation, 0.2)
+	else
 		self:CancelAttack()
-	end
-	if self.IdleTrack then
-		if drawn then
-			self.IdleTrack:Play(0.2)
-		else
-			self.IdleTrack:Stop(0.2)
-		end
+		self:StopCharge()
+		self:SetBlocking(false)
+		self.Anims:Stop(self.Definition.IdleAnimation, 0.2)
 	end
 	self:OnDrawnChanged(drawn)
 end
 
-function BaseWeapon:Attack(step: number): number
-	local attack = self.Definition.Combo[step]
-	local track = self.ComboTracks[step]
-	self:CancelAttack()
-
-	self._attackToken += 1
-	local token = self._attackToken
-	self._currentStep = step
-
-	local duration = attack.Duration
-	local speed = if track.Length > 0 then track.Length / duration else 1
-	track:Play(0.05, 1, speed)
-	self:OnAttackStart(step, attack)
-
-	local windowOpen = false
-	local function open()
-		if token == self._attackToken and not windowOpen then
-			windowOpen = true
-			self:OnHitWindowOpen(step, attack)
-		end
+function BaseWeapon:SetBlocking(blocking: boolean)
+	if self.Blocking == blocking then
+		return
 	end
-	local function close()
-		if token == self._attackToken and windowOpen then
-			windowOpen = false
-			self:OnHitWindowClose(step, attack)
-		end
-	end
-	self._closeWindow = close
-
-	if attack.UseMarkers then
-		local startConn = track:GetMarkerReachedSignal("HitStart"):Connect(open)
-		local endConn = track:GetMarkerReachedSignal("HitEnd"):Connect(close)
-		self._markerConnections = { startConn, endConn }
+	self.Blocking = blocking
+	if blocking then
+		self.Anims:Play(self.Definition.BlockAnimation, 0.12)
 	else
-		task.delay(attack.HitWindow[1] * duration, open)
-		task.delay(attack.HitWindow[2] * duration, close)
+		self.Anims:Stop(self.Definition.BlockAnimation, 0.15)
+	end
+end
+
+function BaseWeapon:StartCharge()
+	self.Anims:Play(self.Definition.Heavy.ChargeAnimation, 0.15)
+end
+
+function BaseWeapon:StopCharge()
+	self.Anims:Stop(self.Definition.Heavy.ChargeAnimation, 0.1)
+end
+
+function BaseWeapon:GetAttackTrack(): AnimationTrack?
+	return self._attack and self._attack.track
+end
+
+function BaseWeapon:PlayAttack(attack, callbacks): AnimationTrack?
+	self:CancelAttack()
+	callbacks = callbacks or {}
+
+	local track = self.Anims:Play(attack.Animation, 0.06)
+	local length = AnimationLibrary.Length(attack.Animation)
+	local markers = {}
+	for _, name in MARKER_ORDER do
+		local time = AnimationLibrary.MarkerTime(attack.Animation, name)
+		if time then
+			table.insert(markers, { name = name, time = time })
+		end
+	end
+	table.sort(markers, function(a, b)
+		return a.time < b.time
+	end)
+
+	local current = { attack = attack, track = track, windowOpen = false }
+	self._attack = current
+
+	local function fire(name: string)
+		if name == "HitStart" then
+			current.windowOpen = true
+			self:OnHitWindowOpen(attack)
+		elseif name == "HitEnd" then
+			if current.windowOpen then
+				current.windowOpen = false
+				self:OnHitWindowClose(attack)
+			end
+		end
+		local callback = callbacks[name]
+		if callback then
+			task.spawn(callback)
+		end
 	end
 
-	task.delay(duration, function()
-		if token == self._attackToken then
-			close()
-			self:_disconnectMarkers()
-			self._currentStep = nil
-			self:OnAttackEnd(step, attack)
+	local elapsed = 0
+	local nextMarker = 1
+	current.connection = RunService.Heartbeat:Connect(function(dt)
+		local speed = if track and track.IsPlaying then track.Speed else 1
+		elapsed += dt * speed
+		while markers[nextMarker] and elapsed >= markers[nextMarker].time do
+			fire(markers[nextMarker].name)
+			nextMarker += 1
+			if self._attack ~= current then
+				return
+			end
+		end
+		if elapsed >= length then
+			self:_finish(current)
+			if callbacks.Ended then
+				task.spawn(callbacks.Ended)
+			end
 		end
 	end)
 
-	return duration
+	self:OnAttackStart(attack)
+	return track
 end
 
-function BaseWeapon:_disconnectMarkers()
-	if self._markerConnections then
-		for _, connection in self._markerConnections do
-			connection:Disconnect()
-		end
-		self._markerConnections = nil
+function BaseWeapon:_finish(current)
+	if self._attack ~= current then
+		return
 	end
+	self._attack = nil
+	if current.connection then
+		current.connection:Disconnect()
+	end
+	if current.windowOpen then
+		current.windowOpen = false
+		self:OnHitWindowClose(current.attack)
+	end
+	self:OnAttackEnd(current.attack)
 end
 
 function BaseWeapon:CancelAttack()
-	if self._currentStep == nil then
+	local current = self._attack
+	if not current then
 		return
 	end
-	local step = self._currentStep
-	if self._closeWindow then
-		self._closeWindow()
-		self._closeWindow = nil
-	end
-	self:_disconnectMarkers()
-	self._attackToken += 1
-	self._currentStep = nil
-	local track = self.ComboTracks[step]
-	if track and track.IsPlaying then
-		track:Stop(0.1)
+	self:_finish(current)
+	if current.track and current.track.IsPlaying then
+		current.track:Stop(0.1)
 	end
 end
 
@@ -194,13 +198,16 @@ function BaseWeapon:ReportHit(target: Model, position: Vector3)
 end
 
 function BaseWeapon:OnDrawnChanged(_drawn: boolean) end
-function BaseWeapon:OnAttackStart(_step: number, _attack) end
-function BaseWeapon:OnHitWindowOpen(_step: number, _attack) end
-function BaseWeapon:OnHitWindowClose(_step: number, _attack) end
-function BaseWeapon:OnAttackEnd(_step: number, _attack) end
+function BaseWeapon:OnAttackStart(_attack) end
+function BaseWeapon:OnHitWindowOpen(_attack) end
+function BaseWeapon:OnHitWindowClose(_attack) end
+function BaseWeapon:OnAttackEnd(_attack) end
 
 function BaseWeapon:Destroy()
 	self:CancelAttack()
+	self:StopCharge()
+	self:SetBlocking(false)
+	self.Anims:Stop(self.Definition.IdleAnimation, 0.1)
 	self.Trove:Destroy()
 end
 
