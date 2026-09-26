@@ -12,13 +12,13 @@
 
     "ServerScriptService": {
       "$className": "ServerScriptService",
-      "$ignoreUnknownInstances": true,
+      "$ignoreUnknownInstances": false,
       "$path": "src/ServerScriptService"
     },
 
     "StarterGui": {
       "$className": "StarterGui",
-      "$ignoreUnknownInstances": true,
+      "$ignoreUnknownInstances": false,
       "$path": "src/StarterGui"
     },
 
@@ -28,7 +28,7 @@
 
       "StarterPlayerScripts": {
         "$className": "StarterPlayerScripts",
-        "$ignoreUnknownInstances": true,
+        "$ignoreUnknownInstances": false,
         "$path": "src/StarterPlayer/StarterPlayerScripts"
       }
     }

@@ -10,7 +10,10 @@ Roblox place `97172972533828`. Code and UI live in `src/` and are synced into St
 | UI (`*.model.json`) | Anything created in Studio outside the mapped folders |
 | Animation references, config | |
 
-Mapped services (see `default.project.json`): `ReplicatedStorage`, `ServerScriptService`, `StarterGui`, `StarterPlayer.StarterPlayerScripts`. Rojo only replaces instances that exist in `src/`; other things you add to these services in Studio are left alone but are **not** tracked by git.
+Mapped services (see `default.project.json`):
+
+- **Git-owned:** `ServerScriptService`, `StarterGui`, `StarterPlayer.StarterPlayerScripts`. These match `src/` exactly. Anything added to them in Studio is **deleted** when Rojo syncs, so add scripts and UI here only through `src/`.
+- **Shared:** `ReplicatedStorage`. Rojo syncs what's in `src/`, but leaves Studio-made assets (models, VFX, sword meshes) alone. Those assets are **not** tracked by git.
 
 ## Setup (once per machine)
 
