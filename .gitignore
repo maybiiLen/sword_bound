@@ -1,6 +1,8 @@
-# Place files built or saved locally (the source of truth for code is src/)
+# Place files saved locally. Studio (Team Create) is the source of truth; src/ is a one-way
+# export of its scripts, and sword_bound.rbxlx is the committed snapshot of the whole place.
 *.rbxl
 *.rbxlx
+!/sword_bound.rbxlx
 *.rbxl.lock
 *.rbxlx.lock
 

@@ -1,0 +1,49 @@
+--[[
+================================================================================
+  SWORD BOUND - TEAM DOCS  (start here)
+================================================================================
+Everything in ReplicatedStorage.Docs is documentation only: comment blocks, never
+require()d. Humans and Cursor agents: read the page for a system BEFORE changing it,
+and update it (plus the changelog below) as the last step of every feature.
+
+PAGES
+  Docs.Conventions   team rules: folders, ownership, how agents should edit the shared place
+  Docs.Combat        swords, combos, hitboxes, server validation, adding weapons
+  Docs.Progression   FF14-style classes (weapon type = class), levels 1-20, XP
+  Docs.PlayerData    saving (ProfileStore) - how ANY system adds saved fields
+  Docs.Sprint        sprint + stamina
+
+SYSTEM INDEX
+  System        Owner     Locations
+  -----------   -------   ---------------------------------------------------------
+  Combat        Henry     ReplicatedStorage.Combat, ServerScriptService.Combat,
+                          StarterPlayerScripts.Combat, Workspace.TrainingDummy
+  Progression   Henry     ReplicatedStorage.Classes, ServerScriptService.Combat.ProgressionService,
+                          StarterGui.ClassGui
+  PlayerData    Henry     ServerScriptService.PlayerData   (shared: everyone adds fields)
+  Sprint        Henry     ReplicatedStorage.Sprint, ServerScriptService.SprintServer,
+                          StarterPlayerScripts.SprintClient, StarterGui.SprintGui
+  Shared utils  shared    ReplicatedStorage.Shared.Util (Signal, Trove)
+  SAO HUD       teammate  StarterGui.SAO_HUD, StarterPlayerScripts.HealthBarController
+  (add your system here when you create one)
+
+SHARED UTILITIES  (ReplicatedStorage.Shared.Util)
+  Signal   custom events:  local s = Signal.new(); s:Connect(fn); s:Fire(...); s:Once(fn); s:Wait()
+  Trove    cleanup bag:    local t = Trove.new(); t:Add(instanceOrConnectionOrFn); t:Connect(sig, fn); t:Clean()
+  Use these instead of writing your own; every object that connects events should own a Trove.
+
+QUICK HOW-TOS
+  Give a mob XP:              set attribute XPReward = <number> on the mob Model (Docs.Progression)
+  Save a new field:           add it to ServerScriptService.PlayerData.DataTemplate (Docs.PlayerData)
+  Add a sword:                definition + model, no code (Docs.Combat > "Adding a new sword")
+  Stop a player sprinting:    character:SetAttribute("SprintBlocked", true) on the server (Docs.Sprint)
+  Read a player's level:      player:GetAttribute("ClassLevel") / ("Level_Sword") anywhere
+
+CHANGELOG  (newest first; one line per change, with your name)
+  2026-09-26  Henry  Combat framework v1: StarterSword ("Anneal Blade"), 3-hit combo, swept hitbox,
+                     server validation, training dummy, class progression (Sword/Bow, Lv 1-20),
+                     PlayerData (ProfileStore), ClassGui, these Docs.
+  (earlier)   Henry  Sprint system with stamina bar.
+]]
+
+return {}

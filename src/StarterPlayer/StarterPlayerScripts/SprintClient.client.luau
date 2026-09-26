@@ -2,6 +2,7 @@
 -- Client side of the sprint system: input, predicted speed change, sprint animation,
 -- camera FOV kick and the stamina bar. The server (SprintServer) is authoritative;
 -- this script only predicts the start of a sprint so it feels instant.
+-- See Docs.Sprint.
 
 local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")

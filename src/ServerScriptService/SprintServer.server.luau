@@ -2,6 +2,7 @@
 -- Server-authoritative sprint + stamina.
 -- Clients only send intent (true/false); the server decides whether they are actually
 -- sprinting, owns the stamina value, and replicates state through character attributes.
+-- See Docs.Sprint.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

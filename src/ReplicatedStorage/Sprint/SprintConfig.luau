@@ -1,6 +1,7 @@
 --!strict
 -- Shared tuning for the sprint system. Read by both SprintServer and SprintClient,
 -- so server validation and client prediction always agree.
+-- See Docs.Sprint.
 
 local SprintConfig = {
 	-- Movement
