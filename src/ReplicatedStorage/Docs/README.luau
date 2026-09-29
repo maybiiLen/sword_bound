@@ -12,6 +12,7 @@ PAGES
   Docs.Progression   FF14-style classes (weapon type = class), levels 1-20, XP
   Docs.PlayerData    saving (ProfileStore) - how ANY system adds saved fields
   Docs.Sprint        sprint + stamina
+  Docs.Roadmap       Floor 1 build list (snapshot of the Google Sheet) + new floor checklist
 
 SYSTEM INDEX
   System        Owner     Locations
@@ -40,6 +41,8 @@ QUICK HOW-TOS
   Read a player's level:      player:GetAttribute("ClassLevel") / ("Level_Sword") anywhere
 
 CHANGELOG  (newest first; one line per change, with your name)
+  2026-09-29  Henry  Docs.Combat: attacking while sheathed no longer draws the weapon (matches WeaponController).
+  2026-09-29  Henry  Docs.Roadmap added: Floor 1 build list and new floor checklist (via Claude).
   2026-09-26  Henry  Combat framework v1: StarterSword ("Anneal Blade"), 3-hit combo, swept hitbox,
                      server validation, training dummy, class progression (Sword/Bow, Lv 1-20),
                      PlayerData (ProfileStore), ClassGui, these Docs.

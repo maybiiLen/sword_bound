@@ -41,7 +41,7 @@ WHERE THINGS ARE
     MovementController, CameraController, LockOnController, KnightAnimator, ClassHudController
 
 CONTROLS  (CombatConfig.Inputs)
-  Light attack      tap Left mouse / R1          (attacking while sheathed draws the weapon)
+  Light attack      tap Left mouse / R1          (does nothing while sheathed; press E to draw first)
   Heavy attack      hold Left mouse / R1, release (longer hold = more damage + poise damage)
   Block / parry     hold Right mouse / L1         (a hit within ParryWindow of raising it = parry)
   Roll              Q / B (no movement input = backstep)

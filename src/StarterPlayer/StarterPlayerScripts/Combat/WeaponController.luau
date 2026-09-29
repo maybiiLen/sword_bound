@@ -330,7 +330,8 @@ local function onAttackPressed()
 		return
 	end
 	if not weapon.Drawn then
-		Remotes.EquipRemote:FireServer("Toggle")
+		-- Clicking no longer auto-draws the weapon (that caused accidental swings/PvP hits).
+		-- Players must press E (CombatConfig.ToggleWeaponInputs) to draw before they can attack.
 		return
 	end
 	attackHeld = true

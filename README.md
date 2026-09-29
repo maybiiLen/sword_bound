@@ -1,37 +1,29 @@
 # Sword Bound
 
-Roblox place `97172972533828`. Code and UI live in `src/` and are synced into Studio with [Rojo](https://rojo.space). The map, models and terrain live in the place file itself.
+Roblox place `97172972533828`.
 
-## What lives where
+## How this repo is used
 
-| In git (`src/`) | In the place file (Roblox version history) |
+The team builds live in the shared Team Create place. The place and Roblox's own version history are the source of truth.
+
+This repo is a personal second version history. Changes are synced from Studio into `src/` by hand and committed here. Nothing flows from this repo back into Studio, so editing files here does not change the game.
+
+## What is tracked
+
+| In git (`src/`) | Only in the place (Roblox version history) |
 |---|---|
-| Scripts, ModuleScripts, RemoteEvents | Workspace: map, terrain, models, lighting |
-| UI (`*.model.json`) | Anything created in Studio outside the mapped folders |
-| Animation references, config | |
+| Scripts, LocalScripts and ModuleScripts | Workspace: map, terrain, models, lighting |
+| Docs pages (`ReplicatedStorage/Docs`) | Most UI layouts (only `SAO_HUD` and `SprintGui` are exported) |
+| RemoteEvents, Animation references, config | Studio-made assets in ReplicatedStorage (weapon models, VFX, sounds, saved animations) |
 
-Mapped services (see `default.project.json`):
+## File naming
 
-- **Git-owned:** `ServerScriptService`, `StarterGui`, `StarterPlayer.StarterPlayerScripts`. These match `src/` exactly. Anything added to them in Studio is **deleted** when Rojo syncs, so add scripts and UI here only through `src/`.
-- **Shared:** `ReplicatedStorage`. Rojo syncs what's in `src/`, but leaves Studio-made assets (models, VFX, sword meshes) alone. Those assets are **not** tracked by git.
+- `Name.server.luau` is a Script, `Name.client.luau` is a LocalScript, `Name.luau` is a ModuleScript
+- Folders mirror the instance tree, for example `src/StarterGui/Main Menu Gui/` holds that ScreenGui's scripts
+- `Name.model.json` is any other instance (UI, RemoteEvents, Animations)
 
-## Setup (once per machine)
+## Syncing from Studio
 
-1. Install [Rokit](https://github.com/rojo-rbx/rokit), then run `rokit install` in this folder to get the pinned Rojo version.
-2. Run `rojo plugin install` and restart Studio.
-
-## Daily workflow
-
-1. `git switch -c feature/my-thing`
-2. `rojo serve`
-3. In Studio: **Plugins → Rojo → Connect**. Files in `src/` now live-sync into Studio.
-4. Edit code in `src/` (not in Studio's script editor — Studio edits to synced scripts are overwritten).
-5. Playtest in Studio.
-6. Commit, push, open a pull request.
-7. After merging to `main`: switch to `main`, sync with Rojo, then **File → Publish to Roblox**.
-
-## Layout conventions
-
-- `Name.server.luau` → Script, `Name.client.luau` → LocalScript, `Name.luau` → ModuleScript
-- Folders become `Folder` instances
-- `Name.model.json` → any other instance (UI, RemoteEvents, Animations)
+1. Compare each script in the live place against its file in `src/`.
+2. Copy over anything changed or new, using the naming above.
+3. Review the diff, then commit.
