@@ -31,6 +31,9 @@
 		  CancelOpen), and the action is over at MoveOpen; nothing else cancels an attack
 		- after MoveOpen the attack track keeps playing its settle until you move or act
 		- every attack/roll costs stamina and is refused at 0 stamina
+		- rolls while locked on keep facing the target and play a directional roll (Roll forward,
+		  RollBack, RollLeft, RollRight; the largest input component wins, the dash follows the exact
+		  input). Unlocked rolls turn to the input and roll forward, Elden Ring style.
 		- attacks turn you toward the lock-on target / stick direction during the wind-up and
 		  commit to that direction at HitStart; movement is slowed while acting
 		- a hit from an enemy flinches you out of an attack unless it has HyperArmor
@@ -160,6 +163,9 @@ local function cancelAll()
 	end
 	if anims then
 		anims:Stop("Roll", 0.1)
+		anims:Stop("RollBack", 0.1)
+		anims:Stop("RollLeft", 0.1)
+		anims:Stop("RollRight", 0.1)
 		anims:Stop("Backstep", 0.1)
 	end
 	movement:StopDash()
@@ -468,6 +474,24 @@ local function releaseHeavy()
 	beginAttack("Heavy", weapon.Definition.Heavy, ratio)
 end
 
+-- Locked-on roll animation: compare the input with the direction to the target. The larger
+-- component wins (diagonals snap to the nearest of the four).
+local function lockedRollAnimation(toTarget: Vector3, input: Vector3): string
+	local right = toTarget:Cross(Vector3.yAxis)
+	local forwardAmount = input:Dot(toTarget)
+	local rightAmount = input:Dot(right)
+	if math.abs(forwardAmount) >= math.abs(rightAmount) then
+		if forwardAmount >= 0 then
+			return "Roll"
+		end
+		return "RollBack"
+	end
+	if rightAmount > 0 then
+		return "RollRight"
+	end
+	return "RollLeft"
+end
+
 function startRoll(): boolean
 	if not anims or not hasStamina() then
 		return false
@@ -476,13 +500,25 @@ function startRoll(): boolean
 	local backstep = input.Magnitude == 0
 	local direction = if backstep then -rootLook() else input
 	local name = if backstep then "Backstep" else "Roll"
+	local animation = name
+	local lockedRoll = false
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local targetPart = lockOn.TargetPart
+	if not backstep and root and targetPart and targetPart.Parent then
+		local offset = targetPart.Position - root.Position
+		local toTarget = Vector3.new(offset.X, 0, offset.Z)
+		if toTarget.Magnitude > 0.1 then
+			animation = lockedRollAnimation(toTarget.Unit, input)
+			lockedRoll = true
+		end
+	end
 
 	local wasBlocking = WeaponController.State == "Blocking"
 	cancelAll()
 	if wasBlocking then
 		Remotes.ActionRemote:FireServer("Block", false)
 	end
-	Remotes.ActionRemote:FireServer(name, direction)
+	Remotes.ActionRemote:FireServer(name, direction, animation)
 
 	token += 1
 	local myToken = token
@@ -493,15 +529,18 @@ function startRoll(): boolean
 	if backstep then
 		movement:SetFacing(rootLook())
 		movement:Dash(direction, CombatConfig.BackstepSpeed, 0.32)
+	elseif lockedRoll then
+		movement:SetFacing(nil) -- keep facing the lock-on target
+		movement:Dash(direction, CombatConfig.RollSpeed, 0.5)
 	else
 		movement:FaceInstantly(direction)
 		movement:SetFacing(direction)
 		movement:Dash(direction, CombatConfig.RollSpeed, 0.5)
 	end
-	anims:Play(name, 0.05)
+	anims:Play(animation, 0.05)
 	Effects.PlaySound(character and character:FindFirstChild("HumanoidRootPart"), "Roll")
 
-	local cancelAt = AnimationLibrary.MarkerTime(name, "CancelOpen") or AnimationLibrary.Length(name)
+	local cancelAt = AnimationLibrary.MarkerTime(animation, "CancelOpen") or AnimationLibrary.Length(animation)
 	task.delay(cancelAt, function()
 		if myToken == token and action then
 			action.cancelOpen = true
@@ -509,7 +548,7 @@ function startRoll(): boolean
 			consumeBuffer()
 		end
 	end)
-	task.delay(AnimationLibrary.Length(name), function()
+	task.delay(AnimationLibrary.Length(animation), function()
 		endAction(myToken)
 	end)
 	return true
@@ -875,7 +914,7 @@ local function onCharacterAdded(char: Model)
 	end
 	character, humanoid = char, hum
 	anims = AnimationSet.new(animator, hum.RigType == Enum.HumanoidRigType.R6)
-	anims:Preload({ "Roll", "Backstep", "Flinch", "Stagger", "GuardBreak", "BlockImpact", "Parry" })
+	anims:Preload({ "Roll", "RollBack", "RollLeft", "RollRight", "Backstep", "Flinch", "Stagger", "GuardBreak", "BlockImpact", "Parry" })
 	attackHeld, blockHeld, flinchUntil, lastLightEnd = false, false, 0, -math.huge
 
 	local function refresh()

@@ -41,6 +41,8 @@ QUICK HOW-TOS
   Read a player's level:      player:GetAttribute("ClassLevel") / ("Level_Sword") anywhere
 
 CHANGELOG  (newest first; one line per change, with your name)
+  2026-10-01  Henry  Directional rolls while locked on (RollBack / RollLeft / RollRight, keep facing the
+                     target); same i-frames, cost and cancel timing as Roll. (via Claude)
   2026-10-01  Henry  Contextual attacks: running, jump (plunge), roll and guard counter, as weapon fields
                      with Sword defaults in Combat.ClassDefaults; server-validated; Studio-only
                      CombatTestInput hook for timed tests. See Docs.Combat > CONTEXTUAL ATTACKS. (via Claude)

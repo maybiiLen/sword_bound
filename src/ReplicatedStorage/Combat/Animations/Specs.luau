@@ -170,6 +170,34 @@ local function rollPose(rot: number, pos: Vector3, waist: number, legs)
 	return with(TUCK_ARMS, { Root = { Pos = pos, Rot = V(rot, 0, 0) }, Waist = V(waist, 0, 0), Legs = legs })
 end
 
+-- Same tuck, rotating about the forward axis (Z) for side rolls: +Z tips the head to the
+-- character's left (-X), -Z to the right.
+local function sideRollPose(rot: number, pos: Vector3, waist: number, legs)
+	return with(TUCK_ARMS, { Root = { Pos = pos, Rot = V(0, 0, rot) }, Waist = V(waist, 0, 0), Legs = legs })
+end
+
+local ROLL_START_LEGS = { RightHip = V(30, 0, 0), RightKnee = V(-40, 0, 0), LeftHip = V(30, 0, 0), LeftKnee = V(-40, 0, 0) }
+local ROLL_LAND_LEGS = { RightHip = V(60, 0, 0), RightKnee = V(-90, 0, 0), LeftHip = V(70, 0, 0), LeftKnee = V(-100, 0, 0) }
+local ROLL_END = with(GUARD, { Root = { Pos = V(0, -0.35, 0), Rot = V(0, 0, 0) }, Waist = V(-10, 0, 0) })
+
+-- Directional rolls for lock-on (2026-10-01). Same timing and markers as Roll (keys at most 90
+-- degrees apart so the rotation interpolates the right way round).
+local function sideRollSpec(sign: number)
+	return {
+		Priority = "Action3",
+		Loop = false,
+		Keyframes = {
+			{ T = 0, Pose = sideRollPose(0, V(0, -0.25, 0), -15, ROLL_START_LEGS), Ease = "Linear" },
+			{ T = 0.1, Pose = sideRollPose(80 * sign, V(0.5 * sign, -1.2, 0), -35, TUCK_LEGS), Ease = "Linear" },
+			{ T = 0.22, Pose = sideRollPose(170 * sign, V(0.2 * sign, -0.7, 0), -40, TUCK_LEGS), Ease = "Linear" },
+			{ T = 0.34, Pose = sideRollPose(260 * sign, V(-0.4 * sign, -1.3, 0), -35, TUCK_LEGS), Ease = "Linear" },
+			{ T = 0.46, Pose = sideRollPose(320 * sign, V(-0.2 * sign, -1.0, 0), -20, ROLL_LAND_LEGS), Ease = "Out" },
+			{ T = 0.62, Pose = ROLL_END },
+		},
+		Markers = { IFrameStart = 0.05, IFrameEnd = 0.35, CancelOpen = 0.5 },
+	}
+end
+
 -- Feet for the player's light attacks, in HumanoidRootPart space (-Z forward, ground ~ Y -2.88).
 -- The lead (left) foot steps in on the Lunge; the rear foot stays planted in the world while
 -- the root is pushed forward (so its Z grows), then drags back in during the settle.
@@ -468,6 +496,23 @@ Specs.Roll = {
 	},
 	Markers = { IFrameStart = 0.05, IFrameEnd = 0.35, CancelOpen = 0.5 },
 }
+
+Specs.RollBack = {
+	Priority = "Action3",
+	Loop = false,
+	Keyframes = {
+		{ T = 0, Pose = rollPose(0, V(0, -0.25, 0), -15, ROLL_START_LEGS), Ease = "Linear" },
+		{ T = 0.1, Pose = rollPose(80, V(0, -1.2, -0.5), -35, TUCK_LEGS), Ease = "Linear" },
+		{ T = 0.22, Pose = rollPose(170, V(0, -0.7, -0.2), -40, TUCK_LEGS), Ease = "Linear" },
+		{ T = 0.34, Pose = rollPose(260, V(0, -1.3, 0.4), -35, TUCK_LEGS), Ease = "Linear" },
+		{ T = 0.46, Pose = rollPose(320, V(0, -1.0, 0.2), -20, ROLL_LAND_LEGS), Ease = "Out" },
+		{ T = 0.62, Pose = ROLL_END },
+	},
+	Markers = { IFrameStart = 0.05, IFrameEnd = 0.35, CancelOpen = 0.5 },
+}
+
+Specs.RollLeft = sideRollSpec(1)
+Specs.RollRight = sideRollSpec(-1)
 
 Specs.Backstep = {
 	Priority = "Action3",

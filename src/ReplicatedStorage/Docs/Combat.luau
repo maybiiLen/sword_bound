@@ -52,7 +52,10 @@ CONTROLS  (CombatConfig.Inputs)
   Guard counter     attack within GuardCounterWindow 0.6 s of blocking or parrying a hit
   Riposte           attack next to a red-highlighted enemy (posture- or guard-broken) = finisher
   Block / parry     hold Right mouse / L1         (a hit within ParryWindow of raising it = parry)
-  Roll              Q / B (no movement input = backstep)
+  Roll              Q / B (no movement input = backstep). Locked on: you keep facing the target and
+                    roll forward / back / left / right by your input (Roll, RollBack, RollLeft,
+                    RollRight; the larger input component wins, the dash follows the exact input).
+                    Not locked on: turn to the input and roll forward (Elden Ring does the same).
   Lock-on           Middle mouse or F / R3;  flick the mouse or right stick to switch target
   Draw / sheath     E / Y
   Free cursor       hold Left Alt (while the weapon is drawn the mouse is locked to the camera)

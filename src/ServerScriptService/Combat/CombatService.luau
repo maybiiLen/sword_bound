@@ -28,7 +28,9 @@
 		                    GuardCounter   GuardCounterUntil (set by DamageService on block/parry) not expired
 		                  Hits then go through HitRemote like any attack.
 	ActionRemote (client -> server)
-		("Roll" | "Backstep", direction)   can act, stamina
+		("Roll" | "Backstep", direction, animation?)   can act, stamina. animation picks a directional
+		                  roll (RollBack / RollLeft / RollRight, client-chosen while locked on); its
+		                  markers set the timings. Anything else falls back to "Roll".
 		("Block", true, clientServerTime?) | ("Block", false)   weapon drawn, can act. The block's start
 		                  time is the client's GetServerTimeNow() at the press, clamped to at most
 		                  MaxParryRewind earlier than now (ping compensation). Raising block within
@@ -108,6 +110,7 @@ type Actor = {
 }
 
 local CONTEXT_ATTACKS = { RunningAttack = true, JumpAttack = true, RollAttack = true, GuardCounter = true }
+local ROLL_ANIMATIONS = { Roll = true, RollBack = true, RollLeft = true, RollRight = true }
 
 local actors: { [Player]: Actor } = {}
 
@@ -461,14 +464,18 @@ local function onAction(player: Player, kind: unknown, arg: unknown, arg2: unkno
 		if not StaminaService:TrySpend(player, cost) then
 			return
 		end
-		local action = newAction(kind, kind, now)
+		local animation = kind
+		if kind == "Roll" and typeof(arg2) == "string" and ROLL_ANIMATIONS[arg2] then
+			animation = arg2
+		end
+		local action = newAction(kind, animation, now)
 		actor.action = action
 		actor.lastLightStep = 0
 		setState(actor, "Rolling")
 		finishLater(actor, action)
 
-		local iStart = AnimationLibrary.MarkerTime(kind, "IFrameStart") or 0
-		local iEnd = AnimationLibrary.MarkerTime(kind, "IFrameEnd") or action.length
+		local iStart = AnimationLibrary.MarkerTime(animation, "IFrameStart") or 0
+		local iEnd = AnimationLibrary.MarkerTime(animation, "IFrameEnd") or action.length
 		local character = actor.character
 		task.delay(iStart, function()
 			if actor.action == action then
