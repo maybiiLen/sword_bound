@@ -12,7 +12,7 @@
 		WeaponRegistry.GetBehavior(weaponId) -> behavior class (WeaponBehaviors.<Class>)
 
 	Class defaults: fields a weapon leaves nil are filled from Combat.ClassDefaults[def.Class]
-	(e.g. every Sword gets the class Riposte), so class-wide moves need no copying.
+	(e.g. every Sword gets the class Riposte and contextual attacks), so class-wide moves need no copying.
 
 	Used by: WeaponService, CombatService, WeaponController. See Docs.Combat.
 ]]
@@ -68,6 +68,14 @@ for _, module in Combat.Weapons:GetChildren() do
 	end
 	if def.Riposte then
 		checkAnimation(def.Riposte.Animation, "Riposte")
+	end
+	for _, field in { "RunningAttack", "JumpAttack", "RollAttack", "GuardCounter" } do
+		local attack = (def :: any)[field]
+		if attack then
+			checkAnimation(attack.Animation, field)
+			local markers = Specs[attack.Animation] and Specs[attack.Animation].Markers
+			check(markers and markers.HitStart and markers.HitEnd, `{field} animation needs HitStart/HitEnd markers`)
+		end
 	end
 	checkAnimation(def.IdleAnimation, "Idle")
 	checkAnimation(def.BlockAnimation, "Block")

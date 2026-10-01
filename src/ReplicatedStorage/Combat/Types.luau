@@ -19,6 +19,7 @@ export type AttackDefinition = {
 	Lunge: number?, -- x CombatConfig.LungeSpeed forward push on the "Lunge" marker (0/nil = none)
 	HyperArmor: boolean?, -- true: taking a hit doesn't flinch you out of this attack (poise break still does)
 	Sound: string?, -- Sound name in Combat.Assets.Sounds played at swing start
+	Plunge: number?, -- jump attacks: downward speed (studs/s) set on the "Lunge" marker, slams you to the ground
 }
 
 export type HeavyDefinition = AttackDefinition & {
@@ -45,6 +46,12 @@ export type WeaponDefinition = {
 	Combo: { AttackDefinition }, -- light attacks, chained by tapping attack
 	Heavy: HeavyDefinition, -- hold attack to charge, release to swing
 	Riposte: RiposteDefinition?, -- finisher on a posture/guard-broken enemy (defaults from Combat.ClassDefaults)
+	-- Contextual attacks: the attack button does one of these instead of Light1 when the situation
+	-- matches (all optional, defaults from Combat.ClassDefaults). See Docs.Combat > CONTEXTUAL ATTACKS.
+	RunningAttack: AttackDefinition?, -- attack while sprinting
+	JumpAttack: AttackDefinition?, -- attack in the air (use Plunge to slam down)
+	RollAttack: AttackDefinition?, -- attack out of a roll/backstep (or within RollAttackWindow after)
+	GuardCounter: AttackDefinition?, -- attack within GuardCounterWindow of blocking or parrying a hit
 	ComboResetTime: number, -- seconds after a light attack ends before the combo restarts at 1
 	BlockStability: number, -- 0..1, higher = less stamina lost per blocked hit
 	IdleAnimation: string, -- drawn guard pose (AnimationLibrary name)

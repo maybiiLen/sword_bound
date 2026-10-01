@@ -45,7 +45,11 @@ CONTROLS  (CombatConfig.Inputs)
   Heavy attack      keep holding Left mouse / R1  (still held at HeavyHoldThreshold 0.2 s = the light
                                                   turns into a heavy charge, stamina refunded; release
                                                   swings; longer hold = more damage + poise damage)
-  Sprint attack     Light1 while sprinting        (lunges SprintAttackLungeMultiplier x further)
+  Running attack    attack while sprinting        (weapons without RunningAttack: Light1 lunges
+                                                  SprintAttackLungeMultiplier x further)
+  Jump attack       attack in the air             (plunges down, hyper armor)
+  Roll attack       attack out of a roll/backstep (or within RollAttackWindow 0.3 s after it)
+  Guard counter     attack within GuardCounterWindow 0.6 s of blocking or parrying a hit
   Riposte           attack next to a red-highlighted enemy (posture- or guard-broken) = finisher
   Block / parry     hold Right mouse / L1         (a hit within ParryWindow of raising it = parry)
   Roll              Q / B (no movement input = backstep)
@@ -124,6 +128,47 @@ RIPOSTE  (finisher; 2026-10-01)
   - Character attribute StaggerKind (PoiseService) says why something is staggered.
   - Sword riposte: Specs.Riposte (thrust, hold, rip out), 2.5 x Damage (x1.5 crit) = 45 with the
     starter sword, 1.05 s action, i-frames throughout.
+
+CONTEXTUAL ATTACKS  (2026-10-01)
+  The attack button does one of these instead of Light1 when the situation matches. Priority:
+  riposte > guard counter > jump > roll > running > normal light. Never in the middle of a light
+  combo (a press during Light1/Light2 always chains the combo), and holding the press never turns
+  them into a heavy.
+  - Data: weapon definition fields RunningAttack, JumpAttack, RollAttack, GuardCounter, each a
+    normal AttackDefinition (Animation, DamageMultiplier, StaminaCost, PoiseDamage, Weight, Lunge,
+    HyperArmor, Sound) plus optional Plunge (downward studs/s on the Lunge marker). Swords get
+    them from Combat.ClassDefaults.Sword; a weapon can override any field or leave one out.
+  - Sword numbers (Light1 = 1.0x damage, 12 poise):
+      Running attack  1.3x, 24 poise, 16 stamina, Lunge 2.2, long leaning forehand slash
+      Jump attack     1.5x, 30 poise, 18 stamina, hyper armor, Lunge 1, Plunge 55, overhead chop
+      Roll attack     1.1x, 14 poise, 12 stamina, Lunge 1.6, quick rising thrust (hits at 0.13 s)
+      Guard counter   1.6x, 36 poise, 16 stamina, hyper armor, rising cut out of the guard
+    Ratios follow Elden Ring's stance damage order (running < jump < guard counter) but toned
+    down (players call ER's jump attack overtuned). Exact values are judgment calls.
+    Research: Project doc claude/worklog.md (2026-10-01 entry).
+  - Client (WeaponController.pickContextAttack): GuardCounter if the character's
+    GuardCounterUntil attribute (server time) hasn't passed; JumpAttack if Humanoid.FloorMaterial
+    is Air; RollAttack if in a roll/backstep or within RollAttackWindow after one; RunningAttack if
+    the Sprinting attribute is on and speed >= RunningAttackMinSpeed (20; sprint 26, walk 16).
+  - Server (CombatService "Context", name): weapon has the field, can act, stamina, and:
+      RunningAttack  Sprinting attribute, or horizontal speed >= RunningAttackMinSpeed - 4
+      JumpAttack     a ground raycast from the root finds nothing within HipHeight + half root +
+                     1.2 studs, within JumpAttackGrace (0.25 s) before or after the request. The
+                     server sees positions ~0.2 s late, so it waits up to the grace for the jump.
+                     (Humanoid.FloorMaterial does NOT work on the server for players.)
+      RollAttack     in a roll/backstep past its CancelOpen, or RollAttackWindow after it ended
+      GuardCounter   GuardCounterUntil not expired. DamageService sets it to now +
+                     GuardCounterWindow on a parry or a block that doesn't guard-break; using the
+                     counter clears it (one counter per blocked hit).
+    Hits then go through HitRemote and the normal hit window / reach checks.
+  - Animations: Specs.RunningAttack, JumpAttack, RollAttack, GuardCounter.
+  - New weapon type: add its own entries to ClassDefaults[class] (or per weapon).
+
+TESTING  (Studio only)
+  Players.<you>.CombatTestInput is a BindableEvent WeaponController creates in Studio. A test
+  script can press inputs with exact timing: :Fire("Attack" | "Block" | "Roll", pressed).
+  Studio's simulated mouse/keyboard input is too slow (100 ms to 1 s between steps) for windows
+  like RollAttackWindow or the parry window.
 
 POISE  (PoiseService)
   Every Humanoid model has poise (players: PlayerMaxPoise; NPCs: their MaxPoise attribute,

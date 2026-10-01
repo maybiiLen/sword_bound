@@ -19,6 +19,14 @@
 		                  "Stagger" or "GuardBreak" (not a parry recoil), within Riposte.Range +
 		                  ReachTolerance. The target is held ("Riposted") for the whole finisher,
 		                  the attacker has i-frames, damage lands at HitStart (no hitbox needed).
+		("Context", name)  a contextual attack; name is a weapon field (RunningAttack, JumpAttack,
+		                  RollAttack, GuardCounter) the weapon has, can act, stamina, and its situation:
+		                    RunningAttack  Sprinting attribute, or moving >= RunningAttackMinSpeed - 4
+		                    JumpAttack     the server sees you airborne (ground raycast) within JumpAttackGrace
+		                                   before or after the request (positions replicate late)
+		                    RollAttack     in a roll/backstep past its CancelOpen, or RollAttackWindow after one
+		                    GuardCounter   GuardCounterUntil (set by DamageService on block/parry) not expired
+		                  Hits then go through HitRemote like any attack.
 	ActionRemote (client -> server)
 		("Roll" | "Backstep", direction)   can act, stamina
 		("Block", true, clientServerTime?) | ("Block", false)   weapon drawn, can act. The block's start
@@ -72,7 +80,7 @@ local CombatService = {
 }
 
 type Action = {
-	kind: string, -- "Light" | "Heavy" | "Charge" | "Roll" | "Backstep"
+	kind: string, -- "Light" | "Heavy" | "Charge" | "Roll" | "Backstep" | "Riposte" | a contextual attack name
 	start: number,
 	length: number,
 	cancelOpen: number,
@@ -95,7 +103,11 @@ type Actor = {
 	lastLightEnd: number,
 	flinchUntil: number,
 	lastBlockRelease: number,
+	lastRollEnd: number,
+	lastAirborne: number,
 }
+
+local CONTEXT_ATTACKS = { RunningAttack = true, JumpAttack = true, RollAttack = true, GuardCounter = true }
 
 local actors: { [Player]: Actor } = {}
 
@@ -116,6 +128,8 @@ local function getActor(player: Player): Actor?
 			lastLightEnd = 0,
 			flinchUntil = 0,
 			lastBlockRelease = -math.huge,
+			lastRollEnd = -math.huge,
+			lastAirborne = -math.huge,
 		}
 		actors[player] = actor
 	end
@@ -177,6 +191,9 @@ local function finishLater(actor: Actor, action: Action)
 		if action.kind == "Light" then
 			actor.lastLightEnd = os.clock()
 		end
+		if action.kind == "Roll" or action.kind == "Backstep" then
+			actor.lastRollEnd = os.clock()
+		end
 		if actor.character.Parent then
 			setState(actor, "Idle")
 		end
@@ -216,6 +233,47 @@ local function startAttack(player: Player, actor: Actor, kind: string, attack: a
 		fireOthers(player, "Swing", actor.character, attack.Sound, action.hitStart, action.hitEnd - action.hitStart)
 	end
 	CombatService.AttackStarted:Fire(player, kind, attack, definition)
+end
+
+-- Is the situation for a contextual attack real? (the client already decided; this is the sanity check)
+local function contextAllowed(name: string, actor: Actor, now: number): (boolean, string?)
+	local character = actor.character
+	local tolerance = CombatConfig.ActionTimingTolerance
+	if name == "RunningAttack" then
+		if character:GetAttribute("Sprinting") == true then
+			return true
+		end
+		local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if root then
+			local velocity = root.AssemblyLinearVelocity
+			local speed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
+			if speed >= CombatConfig.RunningAttackMinSpeed - 4 then
+				return true
+			end
+		end
+		return false, "running attack while not running"
+	elseif name == "JumpAttack" then
+		if now - actor.lastAirborne <= CombatConfig.JumpAttackGrace + tolerance then
+			return true
+		end
+		return false, "jump attack while grounded"
+	elseif name == "RollAttack" then
+		local action = actor.action
+		if action and (action.kind == "Roll" or action.kind == "Backstep") then
+			return true -- canAct already checked the roll's CancelOpen
+		end
+		if now - actor.lastRollEnd <= CombatConfig.RollAttackWindow + tolerance then
+			return true
+		end
+		return false, "roll attack without a roll"
+	elseif name == "GuardCounter" then
+		local openUntil = character:GetAttribute(Attr.GuardCounterUntil)
+		if typeof(openUntil) == "number" and workspace:GetServerTimeNow() <= openUntil + tolerance then
+			return true
+		end
+		return false, "guard counter without a blocked hit"
+	end
+	return false, "unknown contextual attack"
 end
 
 local function onAttack(player: Player, kind: unknown, arg: unknown)
@@ -287,6 +345,51 @@ local function onAttack(player: Player, kind: unknown, arg: unknown)
 		end
 		local ratio = math.clamp((now - actor.chargeStart) / CombatConfig.HeavyFullCharge, 0, 1)
 		startAttack(player, actor, "Heavy", heavy, definition, now, nil, ratio)
+	elseif kind == "Context" then
+		if typeof(arg) ~= "string" or not CONTEXT_ATTACKS[arg] then
+			return
+		end
+		local name = arg :: string
+		local attack = (definition :: any)[name]
+		if not attack then
+			return
+		end
+		if not canAct(actor, now) then
+			CombatService.HitRejected:Fire(player, name .. " while busy (" .. actor.state .. ")")
+			return
+		end
+		local function begin()
+			if not StaminaService:TrySpend(player, attack.StaminaCost) then
+				return
+			end
+			if name == "GuardCounter" then
+				actor.character:SetAttribute(Attr.GuardCounterUntil, nil) -- one counter per blocked hit
+			end
+			startAttack(player, actor, name, attack, definition, now, nil, nil)
+		end
+		local allowed, reason = contextAllowed(name, actor, now)
+		if allowed then
+			begin()
+		elseif name == "JumpAttack" then
+			-- The server sees the character's position ~0.2 s late (measured in Studio), so a jump
+			-- attack pressed early in a jump arrives before the server has seen the jump. Wait up to
+			-- JumpAttackGrace for it; the action still counts from when the request arrived.
+			task.spawn(function()
+				local waited = 0
+				while waited < CombatConfig.JumpAttackGrace do
+					waited += task.wait()
+					if actor.lastAirborne >= now then
+						if actor.character.Parent and canAct(actor, os.clock()) then
+							begin()
+						end
+						return
+					end
+				end
+				CombatService.HitRejected:Fire(player, reason or name)
+			end)
+		else
+			CombatService.HitRejected:Fire(player, reason or name)
+		end
 	elseif kind == "Riposte" then
 		local riposte = definition.Riposte
 		if not riposte or typeof(arg) ~= "Instance" or not arg:IsA("Model") or not arg:IsDescendantOf(workspace) then
@@ -529,6 +632,32 @@ function CombatService:Start()
 			print(`[CombatService] rejected {player.Name}: {reason}`)
 		end)
 	end
+
+	-- Remember when each player was last airborne (jump attack check). Humanoid.FloorMaterial
+	-- stays on the floor on the server for client-owned characters (tested 2026-10-01), so this
+	-- raycasts down from the replicated root instead: nothing within HipHeight + half the root +
+	-- 1.2 studs = airborne.
+	local groundParams = RaycastParams.new()
+	groundParams.FilterType = Enum.RaycastFilterType.Exclude
+	RunService.Heartbeat:Connect(function()
+		local now = os.clock()
+		for _, player in Players:GetPlayers() do
+			local actor = getActor(player)
+			if actor then
+				local character = actor.character
+				local humanoid = character:FindFirstChildOfClass("Humanoid")
+				local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if humanoid and root then
+					groundParams.FilterDescendantsInstances = { character }
+					local reach = humanoid.HipHeight + root.Size.Y / 2 + 1.2
+					local hit = workspace:Raycast(root.Position, Vector3.new(0, -reach, 0), groundParams)
+					if hit == nil then
+						actor.lastAirborne = now
+					end
+				end
+			end
+		end
+	end)
 
 	Players.PlayerRemoving:Connect(function(player)
 		actors[player] = nil

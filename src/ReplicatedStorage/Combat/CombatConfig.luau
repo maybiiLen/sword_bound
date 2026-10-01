@@ -39,6 +39,14 @@ local CombatConfig = {
 	LungeStopDistance = 3.2, -- ...and stop this far from it instead of overshooting
 	MomentumCarryTime = 0.18, -- an attack keeps your current velocity and eases it out over this long
 	SprintAttackLungeMultiplier = 1.8, -- Light1 started while sprinting lunges this much further
+	                                   -- (only for weapons without a RunningAttack)
+
+	-- Contextual attacks (weapon fields RunningAttack / JumpAttack / RollAttack / GuardCounter)
+	RunningAttackMinSpeed = 20, -- horizontal studs/s you must be moving (sprint is 26, walk 16)
+	RollAttackWindow = 0.3, -- seconds after a roll/backstep ends that attack still gives the roll attack
+	GuardCounterWindow = 0.6, -- seconds after blocking or parrying a hit that attack gives the guard counter
+	JumpAttackGrace = 0.25, -- server: a jump attack is valid if the server sees you airborne within this long
+	                        -- before or after the request (it sees positions ~0.2 s late)
 	MoveSpeedMultipliers = { -- x WalkSpeed while in each CombatState
 		Idle = 1,
 		Attacking = 0.3, -- was 0.15 (killed all momentum); velocity is also carried in, see MomentumCarryTime
@@ -126,6 +134,7 @@ local CombatConfig = {
 		IFrames = "IFrames", -- true while hits pass through (rolls)
 		BlockStartedAt = "BlockStartedAt", -- server time the current block started (nil = not blocking)
 		BlockParryWindow = "BlockParryWindow", -- parry window of the current block (ParryWindow or ParryWindowSpammed)
+		GuardCounterUntil = "GuardCounterUntil", -- server time until which attack gives the guard counter (set on block/parry)
 		Poise = "Poise",
 		MaxPoise = "MaxPoise",
 		XPReward = "XPReward", -- on any NPC model: XP granted to whoever lands the killing blow

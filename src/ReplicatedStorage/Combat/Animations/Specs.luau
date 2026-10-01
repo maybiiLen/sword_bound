@@ -698,4 +698,240 @@ Specs.Riposte = {
 	Markers = { Lunge = 0.18, HitStart = 0.3, HitEnd = 0.36, RipOut = 0.68, CancelOpen = 1.0, RollOpen = 1.0, MoveOpen = 1.05 },
 }
 
+-- Contextual attacks (2026-10-01). Same recipe as the light combo: coil, hips fire, blade crosses
+-- on a Linear key, Out-eased end, overshoot, slow settle. Timings are judgment calls (unsourced).
+
+-- RunningAttack: sprint into a deep, leaning forehand slash with a long step (lunge 2.2).
+Specs.RunningAttack = {
+	Priority = "Action3",
+	Loop = false,
+	Keyframes = {
+		{ T = 0, Pose = with(STANCE, { -- running lean, coiled right
+			Root = { Pos = V(0, -0.4, 0), Rot = V(0, -20, 0) },
+			Waist = V(-10, -40, 0),
+			RightHand = { Pos = V(1.35, 0.35, 0.5), Blade = V(0.4, 0.5, 0.75), Pole = V(1, -0.2, 0.6) },
+			LeftArm = { Shoulder = V(50, 0, -30), Elbow = V(60, 0, 0) },
+			Feet = stepFeet(-0.6, 0.6),
+		}), Ease = "Out" },
+		{ T = 0.1, Pose = with(STANCE, { -- coil peak, lead foot lifts
+			Root = { Pos = V(0, -0.45, 0.1), Rot = V(0, -24, 0) },
+			Waist = V(-8, -48, 0),
+			RightHand = { Pos = V(1.45, 0.5, 0.55), Blade = V(0.4, 0.5, 0.75), Pole = V(1, -0.2, 0.6) },
+			LeftArm = { Shoulder = V(55, 0, -30), Elbow = V(60, 0, 0) },
+			Feet = stepFeet(-1.0, 0.6, 0.3, 0),
+		}), Ease = "In" },
+		{ T = 0.16, Pose = with(STANCE, { -- hips fire, long step
+			Root = { Pos = V(0, -0.7, -0.1), Rot = V(0, 4, 0) },
+			Waist = V(-14, -30, 0),
+			RightHand = { Pos = V(1.3, 0.35, 0), Blade = V(0.5, 0.35, 0.75), Pole = V(1, -0.2, 0.5) },
+			LeftArm = { Shoulder = V(35, 0, -32), Elbow = V(50, 0, 0) },
+			Feet = stepFeet(-1.5, 1.2),
+		}), Ease = "Linear" },
+		{ T = 0.22, Pose = with(STANCE, { -- contact, low and leaning in
+			Root = { Pos = V(0, -0.85, -0.2), Rot = V(0, 14, 0) },
+			Waist = V(-22, -2, 0),
+			RightHand = { Pos = V(0.5, -0.25, -1.45), Blade = V(0.1, 0, -1) },
+			LeftArm = { Shoulder = V(15, 0, -40), Elbow = V(40, 0, 0) },
+			Feet = stepFeet(-1.2, 1.7),
+		}), Ease = "Out" },
+		{ T = 0.3, Pose = with(STANCE, { -- end of the cut
+			Root = { Pos = V(0, -0.85, -0.2), Rot = V(0, 20, 0) },
+			Waist = V(-22, 42, 0),
+			RightHand = { Pos = V(-0.5, -0.8, -0.9), Blade = V(-0.9, -0.4, -0.3), Pole = V(0.4, -1, 0.2) },
+			LeftArm = { Shoulder = V(0, 0, -50), Elbow = V(30, 0, 0) },
+			Feet = stepFeet(-1.1, 1.8),
+		}), Ease = "Out" },
+		{ T = 0.45, Pose = with(STANCE, { -- follow-through skid
+			Root = { Pos = V(0, -0.8, -0.15), Rot = V(0, 22, 0) },
+			Waist = V(-18, 48, 0),
+			RightHand = { Pos = V(-0.65, -0.9, -0.7), Blade = V(-0.8, -0.5, 0.2), Pole = V(0.4, -1, 0.2) },
+			LeftArm = { Shoulder = V(0, 0, -52), Elbow = V(30, 0, 0) },
+			Feet = stepFeet(-1.1, 1.8),
+		}), Ease = "InOut" },
+		{ T = 0.8, Pose = with(STANCE, { -- recover, rear foot drags in
+			Root = { Pos = V(0, -0.45, 0), Rot = V(0, 8, 0) },
+			Waist = V(-8, 18, 0),
+			RightHand = { Pos = V(0.15, -0.8, -1.0), Blade = V(-0.45, 0.35, -0.8) },
+			LeftArm = { Shoulder = V(10, 0, -25), Elbow = V(25, 0, 0) },
+			Feet = stepFeet(-0.6, 1.0, 0, 0.16),
+		}), Ease = "InOut" },
+		{ T = 1.0, Pose = with(GUARD, {
+			Root = { Pos = V(0, -0.33, 0), Rot = V(0, 3, 0) },
+			Waist = V(-5, 6, 0),
+			Feet = stepFeet(-0.56, 0.55),
+		}), Ease = "InOut" },
+		{ T = 1.25, Pose = GUARD },
+	},
+	Markers = { Lunge = 0.08, HitStart = 0.18, HitEnd = 0.32, CancelOpen = 0.62, RollOpen = 0.68, MoveOpen = 0.85 },
+}
+
+-- JumpAttack: blade high in the air, legs tucked, chop down as the Plunge (on the Lunge marker)
+-- slams you to the ground, land in a deep crouch.
+local AIR_LEGS = { RightHip = V(50, 0, 0), RightKnee = V(-80, 0, 0), LeftHip = V(70, 0, 0), LeftKnee = V(-60, 0, 0) }
+local LANDING_FEET = { Right = V(0.7, -2.88, 0.8), Left = V(-0.55, -2.88, -0.9) }
+
+Specs.JumpAttack = {
+	Priority = "Action3",
+	Loop = false,
+	Keyframes = {
+		{ T = 0, Pose = { -- blade raised, leaning back
+			Root = { Pos = V(0, 0, 0), Rot = V(0, 0, 0) },
+			Waist = V(16, -10, 0),
+			RightHand = { Pos = V(0.3, 1.7, 0.35), Blade = V(0.1, 0.3, 1), Pole = V(1, 0.2, 0.3) },
+			LeftArm = { Shoulder = V(105, 0, 0), Elbow = V(55, 0, 0) },
+			Legs = AIR_LEGS,
+		}, Ease = "Out" },
+		{ T = 0.16, Pose = { -- peak
+			Root = { Pos = V(0, 0, 0.05), Rot = V(0, 0, 0) },
+			Waist = V(20, -8, 0),
+			RightHand = { Pos = V(0.3, 1.8, 0.45), Blade = V(0.05, 0.2, 1), Pole = V(1, 0.2, 0.3) },
+			LeftArm = { Shoulder = V(110, 0, 0), Elbow = V(50, 0, 0) },
+			Legs = AIR_LEGS,
+		}, Ease = "In" },
+		{ T = 0.24, Pose = { -- chop drives down
+			Root = { Pos = V(0, -0.2, -0.1), Rot = V(0, 0, 0) },
+			Waist = V(0, -6, 0),
+			RightHand = { Pos = V(0.32, 1.2, -0.6), Blade = V(0.05, 0.85, -0.5), Pole = V(1, 0.2, 0.3) },
+			LeftArm = { Shoulder = V(80, 0, 0), Elbow = V(50, 0, 0) },
+			Legs = { RightHip = V(30, 0, 0), RightKnee = V(-50, 0, 0), LeftHip = V(40, 0, 0), LeftKnee = V(-40, 0, 0) },
+		}, Ease = "Linear" },
+		{ T = 0.3, Pose = { -- impact, landing crouch
+			Root = { Pos = V(0, -1.1, -0.25), Rot = V(0, 0, 0) },
+			Waist = V(-32, 0, 0),
+			RightHand = { Pos = V(0.25, -0.6, -1.4), Blade = V(0, -0.45, -0.9) },
+			LeftArm = { Shoulder = V(25, 0, -25), Elbow = V(30, 0, 0) },
+			Feet = LANDING_FEET,
+		}, Ease = "Out" },
+		{ T = 0.5, Pose = { -- hold the crouch
+			Root = { Pos = V(0, -1.15, -0.25), Rot = V(0, 0, 0) },
+			Waist = V(-34, 2, 0),
+			RightHand = { Pos = V(0.25, -0.75, -1.35), Blade = V(0, -0.6, -0.8) },
+			LeftArm = { Shoulder = V(25, 0, -25), Elbow = V(30, 0, 0) },
+			Feet = LANDING_FEET,
+		}, Ease = "InOut" },
+		{ T = 0.95, Pose = with(STANCE, { -- rise, rear foot drags in
+			Root = { Pos = V(0, -0.55, -0.1), Rot = V(0, 0, 0) },
+			Waist = V(-14, 0, 0),
+			RightHand = { Pos = V(0.4, -0.8, -1.05), Blade = V(-0.1, 0.2, -0.95) },
+			LeftArm = { Shoulder = V(15, 0, -20), Elbow = V(25, 0, 0) },
+			Feet = stepFeet(-0.7, 0.8, 0, 0.12),
+		}), Ease = "InOut" },
+		{ T = 1.15, Pose = with(GUARD, {
+			Root = { Pos = V(0, -0.34, 0), Rot = V(0, 0, 0) },
+			Waist = V(-6, 0, 0),
+			Feet = stepFeet(-0.56, 0.55),
+		}), Ease = "InOut" },
+		{ T = 1.35, Pose = GUARD },
+	},
+	Markers = { Lunge = 0.18, HitStart = 0.24, HitEnd = 0.4, CancelOpen = 0.78, RollOpen = 0.82, MoveOpen = 0.98 },
+}
+
+-- RollAttack: out of the roll's crouch, a quick rising thrust (fast HitStart, small commitment).
+Specs.RollAttack = {
+	Priority = "Action3",
+	Loop = false,
+	Keyframes = {
+		{ T = 0, Pose = with(STANCE, { -- crouched, blade low at the hip pointing forward
+			Root = { Pos = V(0, -0.9, 0.1), Rot = V(0, -10, 0) },
+			Waist = V(-20, -15, 0),
+			RightHand = { Pos = V(0.8, -0.6, 0.2), Blade = V(0.05, 0.15, -1), Pole = V(1, -0.5, 0.3) },
+			LeftArm = { Shoulder = V(40, 0, -20), Elbow = V(60, 0, 0) },
+			Feet = stepFeet(-0.7, 0.8),
+		}), Ease = "Out" },
+		{ T = 0.08, Pose = with(STANCE, { -- draw back, lead foot lifts
+			Root = { Pos = V(0, -0.85, 0.15), Rot = V(0, -18, 0) },
+			Waist = V(-12, -30, 0),
+			RightHand = { Pos = V(0.95, -0.4, 0.55), Blade = V(0.05, 0.15, -1), Pole = V(1, -0.5, 0.3) },
+			LeftArm = { Shoulder = V(50, 0, -20), Elbow = V(70, 0, 0) },
+			Feet = stepFeet(-0.95, 0.7, 0.2, 0),
+		}), Ease = "In" },
+		{ T = 0.16, Pose = with(STANCE, { -- thrust, rising out of the crouch
+			Root = { Pos = V(0, -0.6, -0.2), Rot = V(0, 10, 0) },
+			Waist = V(-16, 6, 0),
+			RightHand = { Pos = V(0.35, 0.05, -1.8), Blade = V(0, 0.12, -1), Pole = V(1, -0.3, 0.2) },
+			LeftArm = { Shoulder = V(30, 0, -45), Elbow = V(30, 0, 0) },
+			Feet = stepFeet(-1.3, 1.1),
+		}), Ease = "Out" },
+		{ T = 0.3, Pose = with(STANCE, { -- extended
+			Root = { Pos = V(0, -0.62, -0.22), Rot = V(0, 12, 0) },
+			Waist = V(-18, 8, 0),
+			RightHand = { Pos = V(0.35, 0.1, -1.75), Blade = V(0, 0.15, -1), Pole = V(1, -0.3, 0.2) },
+			LeftArm = { Shoulder = V(30, 0, -45), Elbow = V(30, 0, 0) },
+			Feet = stepFeet(-1.25, 1.15),
+		}), Ease = "InOut" },
+		{ T = 0.6, Pose = with(STANCE, { -- recover, rear foot drags in
+			Root = { Pos = V(0, -0.42, 0), Rot = V(0, 4, 0) },
+			Waist = V(-6, 8, 0),
+			RightHand = { Pos = V(0.4, -0.6, -1.1), Blade = V(-0.3, 0.45, -0.8) },
+			LeftArm = { Shoulder = V(15, 0, -25), Elbow = V(25, 0, 0) },
+			Feet = stepFeet(-0.6, 0.9, 0, 0.14),
+		}), Ease = "InOut" },
+		{ T = 0.8, Pose = with(GUARD, {
+			Root = { Pos = V(0, -0.33, 0), Rot = V(0, 2, 0) },
+			Waist = V(-5, 3, 0),
+			Feet = stepFeet(-0.56, 0.55),
+		}), Ease = "InOut" },
+		{ T = 1.0, Pose = GUARD },
+	},
+	Markers = { Lunge = 0.06, HitStart = 0.13, HitEnd = 0.24, CancelOpen = 0.42, RollOpen = 0.48, MoveOpen = 0.62 },
+}
+
+-- GuardCounter: out of the block, drop the blade low left and cut up across to high right.
+Specs.GuardCounter = {
+	Priority = "Action3",
+	Loop = false,
+	Keyframes = {
+		{ T = 0, Pose = with(BLOCK_UPPER, STANCE), Ease = "Out" },
+		{ T = 0.07, Pose = with(STANCE, { -- coil low left, lead foot lifts
+			Root = { Pos = V(0, -0.55, 0.05), Rot = V(0, 14, 0) },
+			Waist = V(-6, 40, 0),
+			RightHand = { Pos = V(-0.45, -0.8, -0.6), Blade = V(-0.8, -0.45, 0.4), Pole = V(0.3, 0.3, -1) },
+			LeftArm = { Shoulder = V(20, 0, -35), Elbow = V(40, 0, 0) },
+			Feet = stepFeet(-0.85, 0.55, 0.25, 0),
+		}), Ease = "In" },
+		{ T = 0.14, Pose = with(STANCE, { -- hips fire
+			Root = { Pos = V(0, -0.6, -0.05), Rot = V(0, -2, 0) },
+			Waist = V(-8, 22, 0),
+			RightHand = { Pos = V(-0.1, -0.7, -1.05), Blade = V(-0.6, -0.2, -0.75), Pole = V(0.3, 0.3, -1) },
+			LeftArm = { Shoulder = V(25, 0, -32), Elbow = V(40, 0, 0) },
+			Feet = stepFeet(-1.2, 0.95),
+		}), Ease = "Linear" },
+		{ T = 0.2, Pose = with(STANCE, { -- contact, rising across the front
+			Root = { Pos = V(0, -0.55, -0.1), Rot = V(0, -12, 0) },
+			Waist = V(-4, -6, 0),
+			RightHand = { Pos = V(0.6, 0, -1.4), Blade = V(0.35, 0.55, -0.75) },
+			LeftArm = { Shoulder = V(30, 0, -30), Elbow = V(40, 0, 0) },
+			Feet = stepFeet(-0.9, 1.35),
+		}), Ease = "Out" },
+		{ T = 0.3, Pose = with(STANCE, { -- end high right
+			Root = { Pos = V(0, -0.4, -0.05), Rot = V(0, -16, 0) },
+			Waist = V(10, -38, 0),
+			RightHand = { Pos = V(1.4, 1.1, -0.35), Blade = V(0.55, 0.8, 0.2), Pole = V(1, -0.4, 0.4) },
+			LeftArm = { Shoulder = V(45, 0, -25), Elbow = V(50, 0, 0) },
+			Feet = stepFeet(-0.8, 1.45),
+		}), Ease = "Out" },
+		{ T = 0.45, Pose = with(STANCE, { -- overshoot
+			Root = { Pos = V(0, -0.4, -0.05), Rot = V(0, -16, 0) },
+			Waist = V(12, -42, 0),
+			RightHand = { Pos = V(1.5, 1.25, -0.2), Blade = V(0.5, 0.75, 0.45), Pole = V(1, -0.4, 0.4) },
+			LeftArm = { Shoulder = V(45, 0, -25), Elbow = V(50, 0, 0) },
+			Feet = stepFeet(-0.8, 1.45),
+		}), Ease = "InOut" },
+		{ T = 0.8, Pose = with(STANCE, { -- recover, rear foot drags in
+			Root = { Pos = V(0, -0.42, 0), Rot = V(0, -6, 0) },
+			Waist = V(-4, -15, 0),
+			RightHand = { Pos = V(1.0, -0.2, -0.8), Blade = V(0.3, 0.7, -0.5), Pole = V(1, -0.5, 0.4) },
+			LeftArm = { Shoulder = V(20, 0, -18), Elbow = V(30, 0, 0) },
+			Feet = stepFeet(-0.6, 0.95, 0, 0.16),
+		}), Ease = "InOut" },
+		{ T = 1.0, Pose = with(GUARD, {
+			Root = { Pos = V(0, -0.33, 0), Rot = V(0, -3, 0) },
+			Waist = V(-5, -6, 0),
+			Feet = stepFeet(-0.56, 0.55),
+		}), Ease = "InOut" },
+		{ T = 1.2, Pose = GUARD },
+	},
+	Markers = { Lunge = 0.06, HitStart = 0.15, HitEnd = 0.3, CancelOpen = 0.6, RollOpen = 0.66, MoveOpen = 0.82 },
+}
+
 return Specs

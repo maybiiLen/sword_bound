@@ -50,6 +50,11 @@ local Published: { [string]: string } = {
 	Flinch = "",
 	KnightSlash = "",
 	KnightDelayedChop = "",
+	Riposte = "",
+	RunningAttack = "",
+	JumpAttack = "",
+	RollAttack = "",
+	GuardCounter = "",
 }
 
 local R6Fallback: { [string]: string } = {

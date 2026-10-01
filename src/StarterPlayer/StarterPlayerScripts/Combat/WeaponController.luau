@@ -18,6 +18,10 @@
 		- a light's first WindupCancelTime can be cancelled into block or roll (Sekiro style)
 		- attack next to an enemy that is posture-broken / guard-broken (red highlight) = the
 		  weapon's Riposte finisher instead of a light (server-validated, guaranteed damage)
+		- contextual attacks replace Light1 when the situation matches (first match wins):
+		  GuardCounter (within GuardCounterWindow of blocking/parrying a hit), JumpAttack (in the
+		  air; Plunge slams you down), RollAttack (out of a roll/backstep or RollAttackWindow
+		  after it), RunningAttack (sprinting at RunningAttackMinSpeed). Never mid light combo.
 		- attacks keep your momentum (MomentumCarryTime), lunge toward a target in range and
 		  stop short of it (LungeAssistRange / LungeStopDistance), and stop the lunge on a hit;
 		  Light1 out of a sprint lunges further (SprintAttackLungeMultiplier)
@@ -78,6 +82,7 @@ local action: { kind: string, token: number, cancelOpen: boolean, rollOpen: bool
 local token = 0
 local comboStep = 0
 local lastLightEnd = -math.huge
+local lastRollEnd = -math.huge
 local buffered: string? = nil
 local bufferedAt = 0
 local attackHeld = false
@@ -193,6 +198,9 @@ local function endAction(myToken: number)
 	else
 		comboStep = 0
 	end
+	if action.kind == "Roll" or action.kind == "Backstep" then
+		lastRollEnd = os.clock()
+	end
 	action = nil
 	movement:SetFacing(nil)
 	if consumeBuffer(true) then
@@ -279,6 +287,16 @@ local function lunge(scale: number)
 	movement:Dash(direction, CombatConfig.LungeSpeed * scale, CombatConfig.LungeTime)
 end
 
+-- Jump attacks: drive the character straight down so the swing lands with them.
+local function plunge(speed: number)
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root or not humanoid or humanoid.FloorMaterial ~= Enum.Material.Air then
+		return
+	end
+	local velocity = root.AssemblyLinearVelocity
+	root.AssemblyLinearVelocity = Vector3.new(velocity.X * 0.5, -speed, velocity.Z * 0.5)
+end
+
 local function beginAttack(kind: string, attack, chargeRatio: number?, lungeScale: number?)
 	token += 1
 	local myToken = token
@@ -303,8 +321,14 @@ local function beginAttack(kind: string, attack, chargeRatio: number?, lungeScal
 
 	weapon:PlayAttack(attack, {
 		Lunge = function()
-			if myToken == token and (attack.Lunge or 0) > 0 then
+			if myToken ~= token then
+				return
+			end
+			if (attack.Lunge or 0) > 0 then
 				lunge(attack.Lunge * (lungeScale or 1))
+			end
+			if (attack.Plunge or 0) > 0 then
+				plunge(attack.Plunge)
 			end
 		end,
 		HitStart = function()
@@ -312,6 +336,8 @@ local function beginAttack(kind: string, attack, chargeRatio: number?, lungeScal
 				movement:SetFacing(rootLook())
 				if kind == "Heavy" then
 					camera:Punch(0.6 + (chargeRatio or 0) * 1.2)
+				elseif kind ~= "Light" and attack.Weight == "Heavy" then
+					camera:Punch(0.5) -- heavy contextual attacks (running, jump, guard counter)
 				end
 			end
 		end,
@@ -336,6 +362,56 @@ local function beginAttack(kind: string, attack, chargeRatio: number?, lungeScal
 	})
 end
 
+-- Which contextual attack the attack button does right now, if any (first match wins).
+-- continuingCombo: a light combo is still chaining, so the running attack doesn't take over.
+local function pickContextAttack(continuingCombo: boolean): string?
+	if not weapon or not character or not humanoid then
+		return nil
+	end
+	local definition = weapon.Definition
+	if definition.GuardCounter then
+		local openUntil = character:GetAttribute(Attr.GuardCounterUntil)
+		if typeof(openUntil) == "number" and workspace:GetServerTimeNow() <= openUntil then
+			return "GuardCounter"
+		end
+	end
+	if definition.JumpAttack and humanoid.FloorMaterial == Enum.Material.Air then
+		return "JumpAttack"
+	end
+	if definition.RollAttack then
+		local rolling = action ~= nil and (action.kind == "Roll" or action.kind == "Backstep")
+		if rolling or os.clock() - lastRollEnd <= CombatConfig.RollAttackWindow then
+			return "RollAttack"
+		end
+	end
+	if definition.RunningAttack and not continuingCombo and character:GetAttribute("Sprinting") == true then
+		local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if root then
+			local velocity = root.AssemblyLinearVelocity
+			local speed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
+			if speed >= CombatConfig.RunningAttackMinSpeed then
+				return "RunningAttack"
+			end
+		end
+	end
+	return nil
+end
+
+local function startContext(name: string): boolean
+	local attack = weapon and weapon.Definition[name]
+	if not attack then
+		return false
+	end
+	stopBlocking(false)
+	if action and (action.kind == "Roll" or action.kind == "Backstep") then
+		cancelAll() -- out of the roll's recovery
+	end
+	comboStep = 0
+	Remotes.AttackRemote:FireServer("Context", name)
+	beginAttack(name, attack, nil, 1)
+	return true
+end
+
 function startLight(): boolean
 	if not weapon or not weapon.Drawn or not hasStamina() then
 		return false
@@ -344,6 +420,12 @@ function startLight(): boolean
 	local count = #definition.Combo
 	local chaining = (action and action.kind == "Light")
 		or os.clock() - lastLightEnd <= definition.ComboResetTime
+	if not (action and action.kind == "Light") then
+		local context = pickContextAttack(chaining and comboStep > 0)
+		if context then
+			return startContext(context)
+		end
+	end
 	comboStep = if chaining and comboStep > 0 then comboStep % count + 1 else 1
 
 	local sprintAttack = comboStep == 1 and character ~= nil and character:GetAttribute("Sprinting") == true
@@ -851,6 +933,31 @@ function WeaponController:Start(inputController, movementController, cameraContr
 	inputController.LockOnPressed:Connect(onLockOnPressed)
 	inputController.TogglePressed:Connect(onTogglePressed)
 	Remotes.ReactRemote.OnClientEvent:Connect(onReact)
+	-- Studio only: Players.<you>.CombatTestInput (BindableEvent) presses combat inputs with exact
+	-- timing from a test script: :Fire("Attack" | "Block" | "Roll", pressed: boolean). Studio's
+	-- simulated mouse/keyboard input is too slow for windows like RollAttackWindow.
+	if RunService:IsStudio() then
+		local testInput = Instance.new("BindableEvent")
+		testInput.Name = "CombatTestInput"
+		testInput.Event:Connect(function(kind: string, pressed: boolean)
+			if kind == "Attack" then
+				if pressed then
+					onAttackPressed()
+				else
+					onAttackReleased()
+				end
+			elseif kind == "Block" then
+				if pressed then
+					onBlockPressed()
+				else
+					onBlockReleased()
+				end
+			elseif kind == "Roll" and pressed then
+				onRollPressed()
+			end
+		end)
+		testInput.Parent = player
+	end
 	local riposteMark: Highlight? = nil
 	local nextMarkCheck = 0
 	RunService.Heartbeat:Connect(function()

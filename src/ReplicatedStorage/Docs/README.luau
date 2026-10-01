@@ -41,6 +41,9 @@ QUICK HOW-TOS
   Read a player's level:      player:GetAttribute("ClassLevel") / ("Level_Sword") anywhere
 
 CHANGELOG  (newest first; one line per change, with your name)
+  2026-10-01  Henry  Contextual attacks: running, jump (plunge), roll and guard counter, as weapon fields
+                     with Sword defaults in Combat.ClassDefaults; server-validated; Studio-only
+                     CombatTestInput hook for timed tests. See Docs.Combat > CONTEXTUAL ATTACKS. (via Claude)
   2026-10-01  Henry  Riposte finisher on posture/guard-broken enemies (red highlight, i-frames, guaranteed
                      damage) + Combat.ClassDefaults (class-wide weapon fields). See Docs.Combat > RIPOSTE.
                      (via Claude)

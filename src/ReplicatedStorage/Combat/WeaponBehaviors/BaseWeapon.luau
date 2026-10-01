@@ -72,6 +72,12 @@ function BaseWeapon.new(definition, character: Model, model: Model, animationSet
 	if definition.Riposte then
 		table.insert(names, definition.Riposte.Animation)
 	end
+	for _, field in { "RunningAttack", "JumpAttack", "RollAttack", "GuardCounter" } do
+		local attack = definition[field]
+		if attack then
+			table.insert(names, attack.Animation)
+		end
+	end
 	animationSet:Preload(names)
 	return self
 end

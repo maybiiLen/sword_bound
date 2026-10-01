@@ -18,6 +18,8 @@
 			   ParryWindowSpammed if re-raised right after releasing) -> "Parried": attacker loses PoiseDamage x ParryPoiseMultiplier
 		                                          poise; empty = full stagger, else ParryRecoilTime recoil.
 		                                          <= PerfectParryWindow = "PerfectParry" effects.
+		   A parry or a block that doesn't guard-break opens the target's guard counter: sets
+		   GuardCounterUntil = now + GuardCounterWindow (read by CombatService and WeaponController).
 			   otherwise                            -> "Blocked": BlockDamageMultiplier chip damage,
 			                                           stamina loss; 0 stamina -> "GuardBreak"
 			3. otherwise                             -> "Hit" (or "Crit" on a staggered target):
@@ -141,6 +143,7 @@ function DamageService:ResolveHit(hit): (string, number)
 					PoiseService:Stagger(attackerModel, CombatConfig.ParryRecoilTime, "ParryRecoil", true)
 				end
 			end
+			target:SetAttribute(Attr.GuardCounterUntil, workspace:GetServerTimeNow() + CombatConfig.GuardCounterWindow)
 			if targetPlayer then
 				Remotes.ReactRemote:FireClient(targetPlayer, "ParrySuccess", perfect)
 			end
@@ -164,8 +167,11 @@ function DamageService:ResolveHit(hit): (string, number)
 		if staminaLeft <= 0 then
 			result = "GuardBreak"
 			PoiseService:Stagger(target, CombatConfig.GuardBreakTime, "GuardBreak")
-		elseif targetPlayer then
-			Remotes.ReactRemote:FireClient(targetPlayer, "BlockImpact")
+		else
+			target:SetAttribute(Attr.GuardCounterUntil, workspace:GetServerTimeNow() + CombatConfig.GuardCounterWindow)
+			if targetPlayer then
+				Remotes.ReactRemote:FireClient(targetPlayer, "BlockImpact")
+			end
 		end
 		fireEffect("Block", position, nil)
 		self.Damaged:Fire(attacker, humanoid, chip, info)
