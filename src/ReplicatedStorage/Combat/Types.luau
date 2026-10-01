@@ -27,6 +27,14 @@ export type HeavyDefinition = AttackDefinition & {
 	FullChargePoiseBonus: number,
 }
 
+export type RiposteDefinition = {
+	Animation: string, -- markers: Lunge, HitStart (damage lands here, guaranteed), HitEnd, CancelOpen, MoveOpen
+	DamageMultiplier: number, -- x weapon Damage (the staggered target's CritMultiplier applies on top)
+	Range: number, -- studs from your root to the target's root to start a finisher
+	Weight: string?, -- "Light" | "Heavy" hit feel
+	Sound: string?, -- Sound name played at the start
+}
+
 export type WeaponDefinition = {
 	Id: string,
 	DisplayName: string,
@@ -36,6 +44,7 @@ export type WeaponDefinition = {
 	Reach: number, -- studs from the wielder's root part the weapon can hit
 	Combo: { AttackDefinition }, -- light attacks, chained by tapping attack
 	Heavy: HeavyDefinition, -- hold attack to charge, release to swing
+	Riposte: RiposteDefinition?, -- finisher on a posture/guard-broken enemy (defaults from Combat.ClassDefaults)
 	ComboResetTime: number, -- seconds after a light attack ends before the combo restarts at 1
 	BlockStability: number, -- 0..1, higher = less stamina lost per blocked hit
 	IdleAnimation: string, -- drawn guard pose (AnimationLibrary name)

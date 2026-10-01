@@ -16,6 +16,8 @@
 		- attack swings a light on PRESS; still holding at HeavyHoldThreshold (before the light's
 		  HitStart) turns that same swing into a heavy charge, release swings the heavy
 		- a light's first WindupCancelTime can be cancelled into block or roll (Sekiro style)
+		- attack next to an enemy that is posture-broken / guard-broken (red highlight) = the
+		  weapon's Riposte finisher instead of a light (server-validated, guaranteed damage)
 		- attacks keep your momentum (MomentumCarryTime), lunge toward a target in range and
 		  stop short of it (LungeAssistRange / LungeStopDistance), and stop the lunge on a hit;
 		  Light1 out of a sprint lunges further (SprintAttackLungeMultiplier)
@@ -458,6 +460,114 @@ local function request(kind: string, fromPress: number?)
 	end
 end
 
+-- An enemy we can finish: alive, staggered by a posture break or guard break (not a parry recoil
+-- or an ongoing riposte), within the weapon's Riposte.Range and roughly in front of us. The
+-- lock-on target wins if it qualifies.
+local function findRiposteTarget(): Model?
+	local riposte = weapon and weapon.Definition.Riposte
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not riposte or not root then
+		return nil
+	end
+	local function open(model: Model): boolean
+		local humanoid = model:FindFirstChildOfClass("Humanoid")
+		local kind = model:GetAttribute(Attr.StaggerKind)
+		return humanoid ~= nil and humanoid.Health > 0 and (kind == "Stagger" or kind == "GuardBreak")
+	end
+	local locked = lockOn.Target
+	if locked and locked ~= character and open(locked) then
+		local lockedRoot = locked:FindFirstChild("HumanoidRootPart")
+		if lockedRoot and (lockedRoot.Position - root.Position).Magnitude <= riposte.Range then
+			return locked
+		end
+	end
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character }
+	local look = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z).Unit
+	local best: Model? = nil
+	local bestDistance = math.huge
+	local seen = {}
+	for _, part in workspace:GetPartBoundsInRadius(root.Position, riposte.Range, params) do
+		local model = part:FindFirstAncestorOfClass("Model")
+		if model and not seen[model] then
+			seen[model] = true
+			local targetRoot = model:FindFirstChild("HumanoidRootPart")
+			if targetRoot and targetRoot:IsA("BasePart") and open(model) then
+				local offset = targetRoot.Position - root.Position
+				local flat = Vector3.new(offset.X, 0, offset.Z)
+				local distance = flat.Magnitude
+				if distance < bestDistance and (distance < 0.5 or look:Dot(flat.Unit) >= 0.25) then
+					best = model
+					bestDistance = distance
+				end
+			end
+		end
+	end
+	return best
+end
+
+local function startRiposte(target: Model): boolean
+	local riposte = weapon and weapon.Definition.Riposte
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local targetRoot = target:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not riposte or not root or not targetRoot then
+		return false
+	end
+	stopBlocking(false)
+	cancelAll()
+	Remotes.AttackRemote:FireServer("Riposte", target)
+	token += 1
+	local myToken = token
+	action = { kind = "Riposte", token = myToken, cancelOpen = false, rollOpen = false, attack = riposte, startedAt = os.clock(), pressId = 0 }
+	comboStep = 0
+	setState("Attacking")
+
+	-- square up: face the target and close to ~2.6 studs
+	local offset = targetRoot.Position - root.Position
+	local flat = Vector3.new(offset.X, 0, offset.Z)
+	if flat.Magnitude > 0.1 then
+		movement:FaceInstantly(flat.Unit)
+		movement:SetFacing(flat.Unit)
+		local gap = flat.Magnitude - 2.6
+		if gap > 0.1 then
+			movement:Dash(flat.Unit, gap / (0.18 * (2 / 3)), 0.18)
+		end
+	end
+
+	weapon:PlayAttack(riposte, {
+		HitStart = function()
+			if myToken ~= token then
+				return
+			end
+			local position = targetRoot.Position
+			Effects.HitSpark(position)
+			Effects.FlashModel(target, Color3.fromRGB(255, 60, 60), 0.35)
+			Effects.HitStop(weapon:GetAttackTrack(), CombatConfig.HitStop.Heavy * 1.6)
+			Effects.Shake(CombatConfig.Shake.Heavy)
+			Effects.Punch(0.5)
+			Effects.ImpactFrame(position)
+		end,
+		RipOut = function()
+			if myToken == token then
+				Effects.HitSpark(targetRoot.Position)
+				Effects.Shake(CombatConfig.Shake.Light)
+			end
+		end,
+		CancelOpen = function()
+			if myToken == token and action then
+				action.cancelOpen = true
+				action.rollOpen = true
+				consumeBuffer()
+			end
+		end,
+		Ended = function()
+			endAction(myToken)
+		end,
+	})
+	return true
+end
+
 local function onAttackPressed()
 	if not weapon or not isAlive() then
 		return
@@ -466,6 +576,12 @@ local function onAttackPressed()
 		-- Clicking no longer auto-draws the weapon (that caused accidental swings/PvP hits).
 		-- Players must press E (CombatConfig.ToggleWeaponInputs) to draw before they can attack.
 		return
+	end
+	if canAct() then
+		local finishTarget = findRiposteTarget()
+		if finishTarget and startRiposte(finishTarget) then
+			return
+		end
 	end
 	attackHeld = true
 	attackPressedAt = os.clock()
@@ -569,7 +685,9 @@ local function onReact(kind: string, extra: any?)
 	if not isAlive() or not anims then
 		return
 	end
-	if kind == "Stagger" or kind == "GuardBreak" then
+	if kind == "Riposted" then
+		enterStagger("Stagger", duration)
+	elseif kind == "Stagger" or kind == "GuardBreak" then
 		enterStagger(kind, duration)
 	elseif kind == "Flinch" then
 		local attack = action and action.attack
@@ -733,9 +851,37 @@ function WeaponController:Start(inputController, movementController, cameraContr
 	inputController.LockOnPressed:Connect(onLockOnPressed)
 	inputController.TogglePressed:Connect(onTogglePressed)
 	Remotes.ReactRemote.OnClientEvent:Connect(onReact)
+	local riposteMark: Highlight? = nil
+	local nextMarkCheck = 0
 	RunService.Heartbeat:Connect(function()
 		if action == nil and weapon and weapon:HasSettle() and movement:GetMoveInput().Magnitude > 0 then
 			weapon:StopSettle(0.25)
+		end
+		local now = os.clock()
+		if now < nextMarkCheck then
+			return
+		end
+		nextMarkCheck = now + 0.1
+		local target = if weapon and weapon.Drawn and isAlive() then findRiposteTarget() else nil
+		if target then
+			if not riposteMark or riposteMark.Adornee ~= target or not riposteMark.Parent then
+				if riposteMark then
+					riposteMark:Destroy()
+				end
+				local mark = Instance.new("Highlight")
+				mark.Name = "RiposteMark"
+				mark.FillColor = CombatConfig.RiposteMarkColor
+				mark.OutlineColor = CombatConfig.RiposteMarkColor
+				mark.FillTransparency = 0.6
+				mark.OutlineTransparency = 0
+				mark.DepthMode = Enum.HighlightDepthMode.Occluded
+				mark.Adornee = target
+				mark.Parent = target
+				riposteMark = mark
+			end
+		elseif riposteMark then
+			riposteMark:Destroy()
+			riposteMark = nil
 		end
 	end)
 	player.CharacterAdded:Connect(onCharacterAdded)

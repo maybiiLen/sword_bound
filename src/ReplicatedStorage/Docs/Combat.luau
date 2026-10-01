@@ -46,6 +46,7 @@ CONTROLS  (CombatConfig.Inputs)
                                                   turns into a heavy charge, stamina refunded; release
                                                   swings; longer hold = more damage + poise damage)
   Sprint attack     Light1 while sprinting        (lunges SprintAttackLungeMultiplier x further)
+  Riposte           attack next to a red-highlighted enemy (posture- or guard-broken) = finisher
   Block / parry     hold Right mouse / L1         (a hit within ParryWindow of raising it = parry)
   Roll              Q / B (no movement input = backstep)
   Lock-on           Middle mouse or F / R3;  flick the mouse or right stick to switch target
@@ -102,6 +103,27 @@ DEFENSE  (DamageService:ResolveHit, in this order)
                   Damage * BlockStaminaPerDamage * (1 - weapon BlockStability). 0 stamina ->
                   guard break (staggered GuardBreakTime).
   4. Hit          damage (x CritMultiplier if the target is staggered), then poise damage.
+
+RIPOSTE  (finisher; 2026-10-01)
+  When an enemy's posture breaks ("Stagger") or its guard breaks ("GuardBreak"), it gets a red
+  Highlight (CombatConfig.RiposteMarkColor) for whoever is in range, and pressing attack does the
+  weapon's Riposte instead of a light. A parry recoil ("ParryRecoil") is NOT open; keep deflecting
+  until the posture bar empties.
+  - Data: weapon definition field Riposte = { Animation, DamageMultiplier, Range, Weight, Sound }.
+    Every weapon of a class inherits it from Combat.ClassDefaults[class] unless it sets its own
+    (WeaponRegistry merges class defaults into each definition).
+  - Server (CombatService "Riposte", target): validates target alive + StaggerKind Stagger/GuardBreak
+    + PoiseService:IsStaggered + within Range + ReachTolerance + can act. Holds the target with a
+    "Riposted" stagger for the whole animation (poise untouched), gives the attacker IFrames until
+    MoveOpen, and deals Damage x DamageMultiplier at the HitStart marker through
+    DamageService:ResolveHit (CritMultiplier applies because the target is staggered). Client
+    hitbox reports during a riposte are ignored.
+  - Client (WeaponController): findRiposteTarget (lock-on target first, else nearest open enemy in
+    front within Range), squares up and closes to ~2.6 studs, plays the animation, impact frame +
+    red flash + heavy shake at HitStart, a second burst at the "RipOut" marker.
+  - Character attribute StaggerKind (PoiseService) says why something is staggered.
+  - Sword riposte: Specs.Riposte (thrust, hold, rip out), 2.5 x Damage (x1.5 crit) = 45 with the
+    starter sword, 1.05 s action, i-frames throughout.
 
 POISE  (PoiseService)
   Every Humanoid model has poise (players: PlayerMaxPoise; NPCs: their MaxPoise attribute,

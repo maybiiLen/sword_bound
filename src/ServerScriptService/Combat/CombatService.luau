@@ -15,6 +15,10 @@
 		                  attack this press started is still before its HitStart, so it is cancelled,
 		                  its stamina refunded, and the press becomes a heavy charge.
 		("Heavy")         must be Charging; charge ratio measured here, not trusted
+		("Riposte", targetModel)   weapon has a Riposte, can act, target alive and staggered by
+		                  "Stagger" or "GuardBreak" (not a parry recoil), within Riposte.Range +
+		                  ReachTolerance. The target is held ("Riposted") for the whole finisher,
+		                  the attacker has i-frames, damage lands at HitStart (no hitbox needed).
 	ActionRemote (client -> server)
 		("Roll" | "Backstep", direction)   can act, stamina
 		("Block", true, clientServerTime?) | ("Block", false)   weapon drawn, can act. The block's start
@@ -283,6 +287,58 @@ local function onAttack(player: Player, kind: unknown, arg: unknown)
 		end
 		local ratio = math.clamp((now - actor.chargeStart) / CombatConfig.HeavyFullCharge, 0, 1)
 		startAttack(player, actor, "Heavy", heavy, definition, now, nil, ratio)
+	elseif kind == "Riposte" then
+		local riposte = definition.Riposte
+		if not riposte or typeof(arg) ~= "Instance" or not arg:IsA("Model") or not arg:IsDescendantOf(workspace) then
+			return
+		end
+		local target = arg :: Model
+		local targetHumanoid = target:FindFirstChildOfClass("Humanoid")
+		local staggerKind = target:GetAttribute(Attr.StaggerKind)
+		if not targetHumanoid or targetHumanoid.Health <= 0 or not PoiseService:IsStaggered(target)
+			or (staggerKind ~= "Stagger" and staggerKind ~= "GuardBreak") then
+			CombatService.HitRejected:Fire(player, "riposte target not open (" .. tostring(staggerKind) .. ")")
+			return
+		end
+		if not canAct(actor, now) then
+			CombatService.HitRejected:Fire(player, "riposte while busy (" .. actor.state .. ")")
+			return
+		end
+		local root = actor.character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		local targetRoot = target:FindFirstChild("HumanoidRootPart") or target.PrimaryPart
+		if not root or not targetRoot or (root.Position - (targetRoot :: BasePart).Position).Magnitude > riposte.Range + CombatConfig.ReachTolerance then
+			CombatService.HitRejected:Fire(player, "riposte out of range")
+			return
+		end
+		if not DamageService:CanDamage(player, targetHumanoid) then
+			return
+		end
+		-- hold the victim for the whole finisher (keeps poise as-is; the crit multiplier applies)
+		PoiseService:Stagger(target, AnimationLibrary.Length(riposte.Animation) + 0.2, "Riposted", true)
+		startAttack(player, actor, "Riposte", riposte, definition, now, nil, nil)
+		local action = actor.action :: Action
+		local character = actor.character
+		character:SetAttribute(Attr.IFrames, true)
+		task.delay(action.hitStart or 0.3, function()
+			if actor.action ~= action or targetHumanoid.Health <= 0 or not target:IsDescendantOf(workspace) then
+				return
+			end
+			local hitRoot = target:FindFirstChild("HumanoidRootPart") or target.PrimaryPart
+			DamageService:ResolveHit({
+				Attacker = player,
+				Target = targetHumanoid,
+				Damage = definition.Damage * riposte.DamageMultiplier,
+				PoiseDamage = 0,
+				Position = if hitRoot then (hitRoot :: BasePart).Position else nil,
+				Class = definition.Class,
+				WeaponId = definition.Id,
+			})
+		end)
+		task.delay(action.length, function()
+			if actor.action == action or actor.action == nil then
+				character:SetAttribute(Attr.IFrames, nil)
+			end
+		end)
 	end
 end
 
@@ -369,7 +425,7 @@ local function onHit(player: Player, target: unknown, position: unknown)
 		return
 	end
 	local humanoid = target:FindFirstChildOfClass("Humanoid")
-	if not humanoid or action.hit[target] or not action.hitStart or not action.hitEnd then
+	if not humanoid or action.kind == "Riposte" or action.hit[target] or not action.hitStart or not action.hitEnd then
 		return
 	end
 

@@ -142,12 +142,14 @@ function PoiseService:Stagger(model: Model, duration: number, kind: string?, kee
 		entry.poise = entry.max
 	end
 	model:SetAttribute(Attr.CombatState, "Staggered")
+	model:SetAttribute(Attr.StaggerKind, kind or "Stagger")
 	refresh(model, entry)
 	self.Staggered:Fire(model, kind or "Stagger", duration)
 
 	task.delay(duration, function()
 		if entries[model] == entry and entry.staggerToken == myToken then
 			entry.staggerUntil = 0
+			model:SetAttribute(Attr.StaggerKind, nil)
 			if model:GetAttribute(Attr.CombatState) == "Staggered" then
 				model:SetAttribute(Attr.CombatState, "Idle")
 			end

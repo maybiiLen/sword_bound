@@ -11,6 +11,9 @@
 		WeaponRegistry.GetModel(weaponId) -> Model?        the template (clone it)
 		WeaponRegistry.GetBehavior(weaponId) -> behavior class (WeaponBehaviors.<Class>)
 
+	Class defaults: fields a weapon leaves nil are filled from Combat.ClassDefaults[def.Class]
+	(e.g. every Sword gets the class Riposte), so class-wide moves need no copying.
+
 	Used by: WeaponService, CombatService, WeaponController. See Docs.Combat.
 ]]
 
@@ -21,6 +24,7 @@ local WeaponModels = Combat.Assets.WeaponModels
 local Behaviors = Combat.WeaponBehaviors
 local ClassDefinitions = Combat.Parent.Classes.Definitions
 local Specs = (require :: any)(Combat.Animations.Specs)
+local ClassDefaults = (require :: any)(Combat.ClassDefaults)
 
 local definitions: { [string]: Types.WeaponDefinition } = {}
 
@@ -28,7 +32,16 @@ for _, module in Combat.Weapons:GetChildren() do
 	if not module:IsA("ModuleScript") then
 		continue
 	end
-	local def: Types.WeaponDefinition = (require :: any)(module)
+	-- copy, so class defaults can be merged even if the module's table is already frozen
+	local def: Types.WeaponDefinition = table.clone((require :: any)(module))
+	local defaults = ClassDefaults[def.Class]
+	if defaults then
+		for key, value in defaults do
+			if (def :: any)[key] == nil then
+				(def :: any)[key] = value
+			end
+		end
+	end
 	local ok = true
 	local function check(condition: any, message: string)
 		if not condition then
@@ -52,6 +65,9 @@ for _, module in Combat.Weapons:GetChildren() do
 	if def.Heavy then
 		checkAnimation(def.Heavy.Animation, "Heavy")
 		checkAnimation(def.Heavy.ChargeAnimation, "Heavy charge")
+	end
+	if def.Riposte then
+		checkAnimation(def.Riposte.Animation, "Riposte")
 	end
 	checkAnimation(def.IdleAnimation, "Idle")
 	checkAnimation(def.BlockAnimation, "Block")

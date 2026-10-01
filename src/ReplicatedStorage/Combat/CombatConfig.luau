@@ -114,10 +114,13 @@ local CombatConfig = {
 	WeaponModelName = "WeaponModel",
 
 	-- Attributes (on the character / NPC model unless noted)
+	RiposteMarkColor = Color3.fromRGB(255, 45, 45), -- highlight on an enemy you can finish (riposte)
+
 	Attributes = {
 		EquippedWeapon = "EquippedWeapon", -- weapon id, set by the server
 		WeaponDrawn = "WeaponDrawn", -- true when the weapon is in hand
 		CombatState = "CombatState", -- "Idle" | "Attacking" | "Charging" | "Rolling" | "Blocking" | "Staggered"
+		StaggerKind = "StaggerKind", -- why a model is staggered: "Stagger" | "GuardBreak" | "ParryRecoil" | "Riposted"
 		SprintBlocked = "SprintBlocked", -- owned by the Sprint system; combat sets it during actions
 		MoveSpeedMultiplier = "MoveSpeedMultiplier", -- read by the Sprint system when it sets WalkSpeed
 		IFrames = "IFrames", -- true while hits pass through (rolls)

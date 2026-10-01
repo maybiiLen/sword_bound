@@ -69,6 +69,9 @@ function BaseWeapon.new(definition, character: Model, model: Model, animationSet
 	for _, attack in definition.Combo do
 		table.insert(names, attack.Animation)
 	end
+	if definition.Riposte then
+		table.insert(names, definition.Riposte.Animation)
+	end
 	animationSet:Preload(names)
 	return self
 end
@@ -127,6 +130,15 @@ function BaseWeapon:PlayAttack(attack, callbacks): AnimationTrack?
 		local time = AnimationLibrary.MarkerTime(attack.Animation, name)
 		if time then
 			table.insert(markers, { name = name, time = time })
+		end
+	end
+	-- any other marker with a callback (e.g. a riposte's cosmetic "RipOut") fires too
+	for name in callbacks do
+		if name ~= "Ended" and not table.find(MARKER_ORDER, name) then
+			local time = AnimationLibrary.MarkerTime(attack.Animation, name)
+			if time then
+				table.insert(markers, { name = name, time = time })
+			end
 		end
 	end
 	table.sort(markers, function(a, b)

@@ -644,4 +644,58 @@ Specs.KnightDelayedChop = {
 	Markers = { HitStart = 0.95, HitEnd = 1.1 },
 }
 
+-- Riposte: finisher on a posture-broken enemy. Step in, run the blade through, hold it there for a
+-- beat, rip it out to the right, settle. Damage is applied by the server at HitStart (guaranteed),
+-- the attacker has i-frames for the whole action. RipOut is a cosmetic marker (second burst).
+Specs.Riposte = {
+	Priority = "Action4",
+	Loop = false,
+	Keyframes = {
+		{ T = 0, Pose = GUARD, Ease = "Out" },
+		{ T = 0.12, Pose = with(STANCE, { -- draw back: blade level, hand at the hip
+			Root = { Pos = V(0, -0.4, 0.12), Rot = V(0, -20, 0) },
+			Waist = V(6, -35, 0),
+			RightHand = { Pos = V(0.9, -0.3, 0.5), Blade = V(0.05, 0.1, -1), Pole = V(1, -0.5, 0.3) },
+			LeftArm = { Shoulder = V(50, 0, -20), Elbow = V(70, 0, 0) },
+		}), Ease = "In" },
+		{ T = 0.2, Pose = with(STANCE, { -- lead foot lifts
+			Root = { Pos = V(0, -0.42, 0.14), Rot = V(0, -22, 0) },
+			Waist = V(6, -38, 0),
+			RightHand = { Pos = V(0.95, -0.3, 0.6), Blade = V(0.05, 0.1, -1), Pole = V(1, -0.5, 0.3) },
+			LeftArm = { Shoulder = V(55, 0, -20), Elbow = V(70, 0, 0) },
+			Feet = stepFeet(-0.85, 0.5, 0.25, 0),
+		}), Ease = "In" },
+		{ T = 0.3, Pose = with(STANCE, { -- thrust home
+			Root = { Pos = V(0, -0.6, -0.15), Rot = V(0, 10, 0) },
+			Waist = V(-14, 5, 0),
+			RightHand = { Pos = V(0.35, 0, -1.75), Blade = V(0, 0.05, -1), Pole = V(1, -0.3, 0.2) },
+			LeftArm = { Shoulder = V(30, 0, -40), Elbow = V(30, 0, 0) },
+			Feet = stepFeet(-1.15, 1.0),
+		}), Ease = "Out" },
+		{ T = 0.55, Pose = with(STANCE, { -- hold it there
+			Root = { Pos = V(0, -0.62, -0.15), Rot = V(0, 12, 0) },
+			Waist = V(-16, 8, 0),
+			RightHand = { Pos = V(0.35, -0.05, -1.7), Blade = V(0, 0, -1), Pole = V(1, -0.3, 0.2) },
+			LeftArm = { Shoulder = V(30, 0, -40), Elbow = V(30, 0, 0) },
+			Feet = stepFeet(-1.1, 1.05),
+		}), Ease = "In" },
+		{ T = 0.68, Pose = with(STANCE, { -- rip it out to the right
+			Root = { Pos = V(0, -0.5, -0.05), Rot = V(0, -10, 0) },
+			Waist = V(-8, -35, 0),
+			RightHand = { Pos = V(1.3, 0.3, -0.6), Blade = V(0.8, 0.5, -0.3), Pole = V(1, -0.5, 0.4) },
+			LeftArm = { Shoulder = V(40, 0, -20), Elbow = V(50, 0, 0) },
+			Feet = stepFeet(-1.0, 1.05),
+		}), Ease = "Out" },
+		{ T = 0.95, Pose = with(STANCE, { -- recover, rear foot drags in
+			Root = { Pos = V(0, -0.4, 0), Rot = V(0, -4, 0) },
+			Waist = V(-4, -15, 0),
+			RightHand = { Pos = V(1.0, -0.3, -0.7), Blade = V(0.4, 0.6, -0.6), Pole = V(1, -0.5, 0.4) },
+			LeftArm = { Shoulder = V(20, 0, -20), Elbow = V(30, 0, 0) },
+			Feet = stepFeet(-0.6, 0.9, 0, 0.16),
+		}), Ease = "InOut" },
+		{ T = 1.3, Pose = GUARD },
+	},
+	Markers = { Lunge = 0.18, HitStart = 0.3, HitEnd = 0.36, RipOut = 0.68, CancelOpen = 1.0, RollOpen = 1.0, MoveOpen = 1.05 },
+}
+
 return Specs
