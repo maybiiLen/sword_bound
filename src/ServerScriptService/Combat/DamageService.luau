@@ -14,7 +14,9 @@
 		Resolution order:
 			1. target has IFrames (rolling)          -> "Dodged", nothing happens
 			2. target blocking and facing attacker:
-			   block started <= ParryWindow ago     -> "Parried": attacker staggered (riposte window)
+			   block started <= ParryWindow ago     -> "Parried": attacker loses PoiseDamage x ParryPoiseMultiplier
+		                                          poise; empty = full stagger, else ParryRecoilTime recoil.
+		                                          <= PerfectParryWindow = "PerfectParry" effects.
 			   otherwise                            -> "Blocked": BlockDamageMultiplier chip damage,
 			                                           stamina loss; 0 stamina -> "GuardBreak"
 			3. otherwise                             -> "Hit" (or "Crit" on a staggered target):
@@ -64,10 +66,10 @@ local function rootOf(model: Model?): BasePart?
 	return if root and root:IsA("BasePart") then root else nil
 end
 
-local function fireEffect(kind: string, position: Vector3, except: Player?)
+local function fireEffect(kind: string, position: Vector3, except: Player?, model: Model?)
 	for _, other in Players:GetPlayers() do
 		if other ~= except then
-			Remotes.EffectRemote:FireClient(other, kind, position)
+			Remotes.EffectRemote:FireClient(other, kind, position, model)
 		end
 	end
 end
@@ -122,14 +124,22 @@ function DamageService:ResolveHit(hit): (string, number)
 
 	local blockStartedAt = target:GetAttribute(Attr.BlockStartedAt)
 	if typeof(blockStartedAt) == "number" and isFacing(target, attackerModel) then
-		if workspace:GetServerTimeNow() - blockStartedAt <= CombatConfig.ParryWindow then
+		local sinceBlock = workspace:GetServerTimeNow() - blockStartedAt
+		if sinceBlock <= CombatConfig.ParryWindow then
+			local perfect = sinceBlock <= CombatConfig.PerfectParryWindow
 			if attackerModel then
-				PoiseService:Stagger(attackerModel, CombatConfig.ParryStaggerTime, "Stagger")
+				-- Sekiro-style: a parry drains the attacker's poise; only an empty bar is a full stagger,
+				-- otherwise it is a short recoil (room for one counter slash).
+				local drain = (hit.PoiseDamage or 0) * CombatConfig.ParryPoiseMultiplier
+				local broke = PoiseService:DrainPoise(attackerModel, drain)
+				if not broke then
+					PoiseService:Stagger(attackerModel, CombatConfig.ParryRecoilTime, "ParryRecoil", true)
+				end
 			end
 			if targetPlayer then
-				Remotes.ReactRemote:FireClient(targetPlayer, "ParrySuccess")
+				Remotes.ReactRemote:FireClient(targetPlayer, "ParrySuccess", perfect)
 			end
-			fireEffect("Parry", position, nil)
+			fireEffect(if perfect then "PerfectParry" else "Parry", position, nil, attackerModel)
 			self.Resolved:Fire(attacker, humanoid, "Parried", 0)
 			return "Parried", 0
 		end

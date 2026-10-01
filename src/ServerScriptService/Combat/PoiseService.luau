@@ -132,12 +132,15 @@ function PoiseService:IsStaggered(model: Model): boolean
 	return entry ~= nil and os.clock() < entry.staggerUntil
 end
 
-function PoiseService:Stagger(model: Model, duration: number, kind: string?)
+-- keepPoise: a short recoil (e.g. being parried) that does not refill poise.
+function PoiseService:Stagger(model: Model, duration: number, kind: string?, keepPoise: boolean?)
 	local entry = getEntry(model)
 	entry.staggerToken += 1
 	local myToken = entry.staggerToken
 	entry.staggerUntil = os.clock() + duration
-	entry.poise = entry.max
+	if not keepPoise then
+		entry.poise = entry.max
+	end
 	model:SetAttribute(Attr.CombatState, "Staggered")
 	refresh(model, entry)
 	self.Staggered:Fire(model, kind or "Stagger", duration)
@@ -152,6 +155,23 @@ function PoiseService:Stagger(model: Model, duration: number, kind: string?)
 			self.StaggerEnded:Fire(model)
 		end
 	end)
+end
+
+-- Removes poise without a flinch (parries use this on the attacker). Returns true if it broke
+-- poise, in which case the model is now staggered for the full StaggerTime.
+function PoiseService:DrainPoise(model: Model, amount: number): boolean
+	local entry = getEntry(model)
+	if os.clock() < entry.staggerUntil or amount <= 0 then
+		return false
+	end
+	entry.lastHit = os.clock()
+	entry.poise -= amount
+	if entry.poise <= 0 then
+		self:Stagger(model, CombatConfig.StaggerTime, "Stagger")
+		return true
+	end
+	refresh(model, entry)
+	return false
 end
 
 function PoiseService:ApplyPoiseDamage(model: Model, amount: number): string

@@ -9,7 +9,7 @@
 ]]
 
 local CombatConfig = {
-	DefaultWeapon = "StarterSword", -- given to players whose save has no weapon
+	DefaultWeapon = "TestSword", -- given to players whose save has no weapon
 
 	-- Input (ContextActionService bindings)
 	AttackInputs = { Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR1, Enum.KeyCode.ButtonR2 } :: { any },
@@ -18,9 +18,11 @@ local CombatConfig = {
 	LockOnInputs = { Enum.UserInputType.MouseButton3, Enum.KeyCode.F, Enum.KeyCode.ButtonR3 } :: { any }, -- not Tab: Roblox uses it for the player list
 	ToggleWeaponInputs = { Enum.KeyCode.E, Enum.KeyCode.ButtonY } :: { any },
 	FreeCursorKeys = { Enum.KeyCode.LeftAlt } :: { any }, -- hold to unlock the mouse while in combat camera
-	HeavyHoldThreshold = 0.2, -- holding attack longer than this starts a heavy charge instead of a light
+	HeavyHoldThreshold = 0.2, -- the light swings on PRESS; still holding at this point turns it into a heavy
+	                          -- charge (must stay below the light attacks' HitStart)
 	HeavyFullCharge = 1.0, -- seconds of charging for the full-charge bonus
 	InputBufferTime = 0.35, -- presses this long before an action can cancel are queued
+	WindupCancelTime = 0.15, -- a light attack's first 0.15 s can be cancelled into block or roll (Sekiro style)
 
 	-- Stamina (the pool itself is SprintConfig.MaxStamina / RegenRate; costs of attacks are per attack)
 	RollStaminaCost = 18,
@@ -30,11 +32,16 @@ local CombatConfig = {
 	-- Movement
 	RollSpeed = 30, -- studs/s at the start of a roll, eases out over the roll
 	BackstepSpeed = 22,
-	LungeSpeed = 12, -- forward push on an attack's "Lunge" marker (x attack.Lunge)
-	LungeTime = 0.12,
+	LungeSpeed = 20, -- forward push on an attack's "Lunge" marker (x attack.Lunge); ~2 studs at Lunge 1
+	LungeTime = 0.15,
+	LungeAssistRange = 8, -- lunges steer toward the lock-on target (or the nearest enemy in front) in range
+	LungeAssistAngle = 60, -- half-angle in degrees of the "in front" cone when not locked on
+	LungeStopDistance = 3.2, -- ...and stop this far from it instead of overshooting
+	MomentumCarryTime = 0.18, -- an attack keeps your current velocity and eases it out over this long
+	SprintAttackLungeMultiplier = 1.8, -- Light1 started while sprinting lunges this much further
 	MoveSpeedMultipliers = { -- x WalkSpeed while in each CombatState
 		Idle = 1,
-		Attacking = 0.15,
+		Attacking = 0.3, -- was 0.15 (killed all momentum); velocity is also carried in, see MomentumCarryTime
 		Charging = 0.3,
 		Blocking = 0.55,
 		Rolling = 0,
@@ -47,7 +54,10 @@ local CombatConfig = {
 	BlockDamageMultiplier = 0.1, -- damage that gets through a block
 	BlockStaminaPerDamage = 1.6, -- stamina lost per point of blocked damage (x (1 - weapon BlockStability))
 	GuardBreakTime = 1.0,
-	ParryStaggerTime = 1.6, -- how long an attacker is staggered after being parried (riposte window)
+	ParryRecoilTime = 0.45, -- a parried attacker recoils this long (room for one counter slash)
+	ParryPoiseMultiplier = 1.0, -- a parry drains attack.PoiseDamage x this from the ATTACKER's poise;
+	                            -- emptying it gives the full StaggerTime stagger instead of a recoil
+	PerfectParryWindow = 0.08, -- a parry this early into the block is "perfect": bigger effects + impact frame
 
 	-- Poise / stagger
 	PlayerMaxPoise = 40,
@@ -76,8 +86,9 @@ local CombatConfig = {
 	},
 
 	-- Feedback per attack Weight
-	HitStop = { Light = 0.06, Heavy = 0.11 } :: { [string]: number },
-	Shake = { Light = 0.25, Heavy = 0.6, Block = 0.2, Parry = 0.45, Stagger = 0.5 } :: { [string]: number },
+	HitStop = { Light = 0.06, Heavy = 0.11, Parry = 0.1, PerfectParry = 0.14 } :: { [string]: number },
+	Shake = { Light = 0.25, Heavy = 0.6, Block = 0.2, Parry = 0.45, PerfectParry = 0.7, Stagger = 0.5 } :: { [string]: number },
+	Punch = { Parry = 0.3, PerfectParry = 0.6 } :: { [string]: number }, -- camera punch (studs) for the parrier
 
 	-- Server validation
 	HitWindowAllowance = 0.25, -- seconds of slack either side of a hit window (network jitter)

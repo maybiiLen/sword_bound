@@ -22,6 +22,6 @@
 
 return {
 	Version = 1,
-	EquippedWeapon = "StarterSword",
+	EquippedWeapon = "TestSword",
 	Classes = {},
 }

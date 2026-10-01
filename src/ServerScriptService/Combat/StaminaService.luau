@@ -84,6 +84,16 @@ function StaminaService:Spend(player: Player, amount: number): number
 	return state.stamina
 end
 
+-- Gives stamina back (e.g. a light attack turned into a heavy charge before it could hit).
+function StaminaService:Refund(player: Player, amount: number)
+	local state = stateFor(player)
+	if not state or amount <= 0 then
+		return
+	end
+	state.stamina = math.min(state.stamina + amount, SprintConfig.MaxStamina)
+	replicate(state, os.clock(), true)
+end
+
 function StaminaService:TrySpend(player: Player, amount: number): boolean
 	local state = stateFor(player)
 	if not state or state.stamina <= 0 then

@@ -21,10 +21,15 @@
 		weapon:SetBlocking(blocking)
 		weapon:StartCharge() / weapon:StopCharge()
 		weapon:PlayAttack(attack, callbacks?) -> AnimationTrack?
-			callbacks: { Lunge, HitStart, HitEnd, CancelOpen, Ended } (all optional functions)
+			callbacks: { Lunge, HitStart, HitEnd, CancelOpen, RollOpen, MoveOpen, Ended } (all optional)
+			Ended fires at the MoveOpen marker (AnimationLibrary.ActionLength). The track keeps
+			playing its settle after that; :StopSettle(fade) ends it (moving, blocking, charging,
+			a new attack and :CancelAttack() all stop it).
 		weapon:GetAttackTrack() -> AnimationTrack?
 		weapon:CancelAttack()
-		weapon:ReportHit(targetModel, position)
+		weapon:StopSettle(fadeTime?)
+		weapon:HasSettle() -> boolean
+		weapon:ReportHit(targetModel, position)   also calls weapon.HitLanded(target) if set
 		weapon:Destroy()
 
 	Subclass pattern:
@@ -43,7 +48,7 @@ local AnimationLibrary = require(ReplicatedStorage.Combat.Animations.AnimationLi
 
 local HitRemote = ReplicatedStorage.Combat.Remotes.HitRemote
 
-local MARKER_ORDER = { "Lunge", "HitStart", "HitEnd", "CancelOpen" }
+local MARKER_ORDER = { "Lunge", "HitStart", "HitEnd", "CancelOpen", "RollOpen" }
 
 local BaseWeapon = {}
 BaseWeapon.__index = BaseWeapon
@@ -58,6 +63,7 @@ function BaseWeapon.new(definition, character: Model, model: Model, animationSet
 	self.Blocking = false
 	self.Trove = Trove.new()
 	self._attack = nil
+	self._settleTrack = nil
 
 	local names = { definition.IdleAnimation, definition.BlockAnimation, definition.Heavy.ChargeAnimation, definition.Heavy.Animation }
 	for _, attack in definition.Combo do
@@ -89,6 +95,7 @@ function BaseWeapon:SetBlocking(blocking: boolean)
 	end
 	self.Blocking = blocking
 	if blocking then
+		self:StopSettle(0.1)
 		self.Anims:Play(self.Definition.BlockAnimation, 0.12)
 	else
 		self.Anims:Stop(self.Definition.BlockAnimation, 0.15)
@@ -96,6 +103,7 @@ function BaseWeapon:SetBlocking(blocking: boolean)
 end
 
 function BaseWeapon:StartCharge()
+	self:StopSettle(0.1)
 	self.Anims:Play(self.Definition.Heavy.ChargeAnimation, 0.15)
 end
 
@@ -112,7 +120,8 @@ function BaseWeapon:PlayAttack(attack, callbacks): AnimationTrack?
 	callbacks = callbacks or {}
 
 	local track = self.Anims:Play(attack.Animation, 0.06)
-	local length = AnimationLibrary.Length(attack.Animation)
+	-- gameplay ends at MoveOpen; the rest of the track is the settle tail
+	local length = AnimationLibrary.ActionLength(attack.Animation)
 	local markers = {}
 	for _, name in MARKER_ORDER do
 		local time = AnimationLibrary.MarkerTime(attack.Animation, name)
@@ -157,6 +166,9 @@ function BaseWeapon:PlayAttack(attack, callbacks): AnimationTrack?
 		end
 		if elapsed >= length then
 			self:_finish(current)
+			if track and track.IsPlaying then
+				self._settleTrack = track
+			end
 			if callbacks.Ended then
 				task.spawn(callbacks.Ended)
 			end
@@ -182,7 +194,28 @@ function BaseWeapon:_finish(current)
 	self:OnAttackEnd(current.attack)
 end
 
+function BaseWeapon:StopSettle(fadeTime: number?)
+	local track = self._settleTrack
+	self._settleTrack = nil
+	if track and track.IsPlaying then
+		track:Stop(fadeTime or 0.2)
+	end
+end
+
+function BaseWeapon:HasSettle(): boolean
+	local track = self._settleTrack
+	if track == nil then
+		return false
+	end
+	if not track.IsPlaying then
+		self._settleTrack = nil
+		return false
+	end
+	return true
+end
+
 function BaseWeapon:CancelAttack()
+	self:StopSettle(0.1)
 	local current = self._attack
 	if not current then
 		return
@@ -195,6 +228,9 @@ end
 
 function BaseWeapon:ReportHit(target: Model, position: Vector3)
 	HitRemote:FireServer(target, position)
+	if self.HitLanded then
+		self.HitLanded(target) -- set by WeaponController (stops the lunge on contact)
+	end
 end
 
 function BaseWeapon:OnDrawnChanged(_drawn: boolean) end

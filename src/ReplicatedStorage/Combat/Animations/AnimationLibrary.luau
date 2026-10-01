@@ -18,6 +18,8 @@
 		AnimationLibrary.Spec(name) -> spec?
 		AnimationLibrary.Length(name) -> seconds
 		AnimationLibrary.MarkerTime(name, marker) -> seconds?
+		AnimationLibrary.ActionLength(name) -> seconds   MoveOpen marker, else the full length
+		AnimationLibrary.RollOpenTime(name) -> seconds   RollOpen, else CancelOpen, else ActionLength
 		AnimationLibrary.Priority(name) -> Enum.AnimationPriority
 		AnimationLibrary.IsLooped(name) -> boolean
 
@@ -114,6 +116,29 @@ end
 function AnimationLibrary.MarkerTime(name: string, marker: string): number?
 	local spec = Specs[name]
 	return spec and spec.Markers and spec.Markers[marker]
+end
+
+-- How long an action lasts for gameplay. Attacks can end early (MoveOpen) while the track keeps
+-- playing its settle as a cosmetic tail.
+function AnimationLibrary.ActionLength(name: string): number
+	local moveOpen = AnimationLibrary.MarkerTime(name, "MoveOpen")
+	if moveOpen then
+		return moveOpen
+	end
+	return AnimationLibrary.Length(name)
+end
+
+-- When a roll may cancel this action. Defaults to CancelOpen so older specs behave as before.
+function AnimationLibrary.RollOpenTime(name: string): number
+	local rollOpen = AnimationLibrary.MarkerTime(name, "RollOpen")
+	if rollOpen then
+		return rollOpen
+	end
+	local cancelOpen = AnimationLibrary.MarkerTime(name, "CancelOpen")
+	if cancelOpen then
+		return cancelOpen
+	end
+	return AnimationLibrary.ActionLength(name)
 end
 
 function AnimationLibrary.Priority(name: string): Enum.AnimationPriority

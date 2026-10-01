@@ -268,7 +268,7 @@ function SparringKnightService:Start()
 		knight.facing = nil
 		knight.humanoid:Move(Vector3.zero)
 		knight.humanoid.WalkSpeed = 0
-		playAction(knight, if kind == "GuardBreak" then "GuardBreak" else "Stagger")
+		playAction(knight, if kind == "GuardBreak" then "GuardBreak" elseif kind == "ParryRecoil" then "Flinch" else "Stagger")
 	end)
 	PoiseService.StaggerEnded:Connect(function(model: Model)
 		local knight = knights[model]

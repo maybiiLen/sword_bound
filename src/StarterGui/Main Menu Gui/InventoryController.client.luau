@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
 local menuGui = script.Parent
+local PanelManager = require(menuGui:WaitForChild("PanelManager"))
 local dropdown = menuGui:WaitForChild("DropdownMenu")
 local inventoryWrap = dropdown:WaitForChild("Wrap_Inventory Button")
 local inventoryButton = inventoryWrap:WaitForChild("Inventory Button")
@@ -124,12 +125,14 @@ local function closePanel()
 end
 
 local function openPanel()
+	PanelManager.open("Inventory") -- close any other open HUD panel first
 	isOpen = true
 	panel.Visible = true
-	dropdown.Visible = false -- close the dropdown behind it
 	nameLabel.Text = player.DisplayName
 	buildAvatarPreview()
 end
+
+PanelManager.register("Inventory", closePanel)
 
 inventoryButton.MouseButton1Click:Connect(function()
 	if isOpen then

@@ -1,6 +1,7 @@
 local TweenService = game:GetService("TweenService")
 
 local menuGui = script.Parent
+local PanelManager = require(menuGui:WaitForChild("PanelManager"))
 local glow = menuGui:WaitForChild("Main Menu")
 local button = glow:WaitForChild("Main menu Button")
 local dropdown = menuGui:WaitForChild("DropdownMenu")
@@ -74,6 +75,7 @@ local function closeDropdown()
 		return
 	end
 	isOpen = false
+
 	cancelTweens()
 
 	local home = homePosition()
@@ -121,6 +123,9 @@ local function openDropdown()
 	if isOpen then
 		return
 	end
+	-- Opening the dropdown itself no longer closes other HUD panels -- only actually
+	-- picking one of the 6 items inside it does (each item's own controller calls
+	-- PanelManager.open for itself, which also closes this dropdown in the process).
 	isOpen = true
 	cancelTweens()
 
@@ -163,6 +168,8 @@ end
 
 -- Toggling only happens via the main button itself, so the rest of the
 -- screen stays fully interactive while the dropdown is open.
+PanelManager.register("Dropdown", closeDropdown)
+
 button.MouseButton1Click:Connect(function()
 	if isOpen then
 		closeDropdown()

@@ -11,7 +11,9 @@
 
 	AttackRemote (client -> server)
 		("Light", step)   weapon drawn, can act, step 1 or the next combo step, stamina
-		("ChargeStart")   weapon drawn, can act, stamina > 0
+		("ChargeStart", fromLight?)   weapon drawn, can act, stamina > 0. fromLight = true: the light
+		                  attack this press started is still before its HitStart, so it is cancelled,
+		                  its stamina refunded, and the press becomes a heavy charge.
 		("Heavy")         must be Charging; charge ratio measured here, not trusted
 	ActionRemote (client -> server)
 		("Roll" | "Backstep", direction)   can act, stamina
@@ -21,7 +23,10 @@
 		ReachTolerance, each target once per swing -> DamageService:ResolveHit.
 
 	"Can act" = Idle/Blocking, or the current attack/roll has reached its CancelOpen marker
-	(minus ActionTimingTolerance), and not staggered or flinching.
+	(RollOpen for rolls; minus ActionTimingTolerance), and not staggered or flinching.
+	A light attack's first WindupCancelTime can be cancelled into Block or Roll.
+	An attack ends for gameplay at its MoveOpen marker (AnimationLibrary.ActionLength); the
+	client keeps playing the settle as a cosmetic tail.
 
 	Reactions to the player (ReactRemote): Stagger / GuardBreak (from PoiseService) and Flinch
 	(ignored while the current attack has HyperArmor). DamageService sends BlockImpact and
@@ -64,6 +69,7 @@ type Action = {
 	start: number,
 	length: number,
 	cancelOpen: number,
+	rollOpen: number,
 	hitStart: number?,
 	hitEnd: number?,
 	attack: any?,
@@ -129,7 +135,7 @@ local function fireOthers(player: Player, ...)
 	end
 end
 
-local function canAct(actor: Actor, now: number): boolean
+local function canAct(actor: Actor, now: number, kind: string?): boolean
 	if actor.state == "Staggered" or now < actor.flinchUntil then
 		return false
 	end
@@ -137,8 +143,17 @@ local function canAct(actor: Actor, now: number): boolean
 		return true
 	end
 	local action = actor.action
+	if actor.state == "Attacking" and action and action.kind == "Light" and (kind == "Roll" or kind == "Block") then
+		if now - action.start <= CombatConfig.WindupCancelTime + CombatConfig.ActionTimingTolerance then
+			return true
+		end
+	end
 	if (actor.state == "Attacking" or actor.state == "Rolling") and action then
-		return now >= action.start + action.cancelOpen - CombatConfig.ActionTimingTolerance
+		local opensAt = action.cancelOpen
+		if kind == "Roll" then
+			opensAt = action.rollOpen
+		end
+		return now >= action.start + opensAt - CombatConfig.ActionTimingTolerance
 	end
 	return false
 end
@@ -159,12 +174,13 @@ local function finishLater(actor: Actor, action: Action)
 end
 
 local function newAction(kind: string, animation: string, now: number): Action
-	local length = AnimationLibrary.Length(animation)
+	local length = AnimationLibrary.ActionLength(animation)
 	return {
 		kind = kind,
 		start = now,
 		length = length,
 		cancelOpen = AnimationLibrary.MarkerTime(animation, "CancelOpen") or length,
+		rollOpen = AnimationLibrary.RollOpenTime(animation),
 		hitStart = AnimationLibrary.MarkerTime(animation, "HitStart"),
 		hitEnd = AnimationLibrary.MarkerTime(animation, "HitEnd"),
 		hit = {},
@@ -227,7 +243,24 @@ local function onAttack(player: Player, kind: unknown, arg: unknown)
 		end
 		startAttack(player, actor, "Light", attack, definition, now, arg, nil)
 	elseif kind == "ChargeStart" then
-		if not definition.Heavy or not canAct(actor, now) or StaminaService:Get(player) <= 0 then
+		if not definition.Heavy then
+			return
+		end
+		local current = actor.action
+		local fromLight = arg == true
+			and actor.state == "Attacking"
+			and current ~= nil
+			and current.kind == "Light"
+			and current.hitStart ~= nil
+			and now - current.start <= current.hitStart + CombatConfig.ActionTimingTolerance
+		if fromLight then
+			-- the press that started this light was held: it was a heavy all along
+			StaminaService:Refund(player, current.attack and current.attack.StaminaCost or 0)
+			actor.lastLightStep = 0
+		elseif not canAct(actor, now) then
+			return
+		end
+		if StaminaService:Get(player) <= 0 then
 			return
 		end
 		actor.chargeStart = now
@@ -255,7 +288,7 @@ local function onAction(player: Player, kind: unknown, arg: unknown)
 	local now = os.clock()
 
 	if kind == "Roll" or kind == "Backstep" then
-		if not canAct(actor, now) then
+		if not canAct(actor, now, "Roll") then
 			CombatService.HitRejected:Fire(player, kind .. " while busy (" .. actor.state .. ")")
 			return
 		end
@@ -289,7 +322,7 @@ local function onAction(player: Player, kind: unknown, arg: unknown)
 	elseif kind == "Block" then
 		if arg == true then
 			local definition = WeaponService:GetEquipped(player)
-			if actor.state == "Blocking" or not definition or not WeaponService:IsDrawn(player) or not canAct(actor, now) then
+			if actor.state == "Blocking" or not definition or not WeaponService:IsDrawn(player) or not canAct(actor, now, "Block") then
 				return
 			end
 			actor.action = nil

@@ -41,6 +41,15 @@ QUICK HOW-TOS
   Read a player's level:      player:GetAttribute("ClassLevel") / ("Level_Sword") anywhere
 
 CHANGELOG  (newest first; one line per change, with your name)
+  2026-09-30  Henry  Combat momentum + deflect pass (via Claude): light swings on press (hold turns it into
+                     the heavy, stamina refunded), attacks carry momentum + bigger target-assisted lunge that
+                     stops on contact, sprint attack, wind-up cancel into block/roll, Sekiro-style parry
+                     (drains attacker poise, short recoil, perfect parry tier), new parry VFX/SFX. See
+                     Docs.Combat > Controls / State machine / Defense / Effects.
+  2026-09-30  Henry  Combat feel pass (via Claude): reworked Light1-3 (hip-led swings, foot step on the
+                     lunge, overshoot, settle tail, combo poses flow into each other) and staggered
+                     cancels (RollOpen, MoveOpen markers). Server/client timing unchanged except rolls
+                     out of Light1/2 open 0.08 s later. See Docs.Combat > State machine / Animations.
   2026-09-29  Henry  Docs.Combat: attacking while sheathed no longer draws the weapon (matches WeaponController).
   2026-09-29  Henry  Docs.Roadmap added: Floor 1 build list and new floor checklist (via Claude).
   2026-09-26  Henry  Combat framework v1: StarterSword ("Anneal Blade"), 3-hit combo, swept hitbox,
