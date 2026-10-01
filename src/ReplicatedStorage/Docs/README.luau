@@ -41,6 +41,8 @@ QUICK HOW-TOS
   Read a player's level:      player:GetAttribute("ClassLevel") / ("Level_Sword") anywhere
 
 CHANGELOG  (newest first; one line per change, with your name)
+  2026-10-01  Henry  Parry window 0.2 -> 0.3 s, anti-mash (re-raise within 0.4 s = 0.07 s window),
+                     ping compensation via client press time (max 0.15 s rewind). (via Claude)
   2026-09-30  Henry  Combat momentum + deflect pass (via Claude): light swings on press (hold turns it into
                      the heavy, stamina refunded), attacks carry momentum + bigger target-assisted lunge that
                      stops on contact, sprint attack, wind-up cancel into block/roll, Sekiro-style parry

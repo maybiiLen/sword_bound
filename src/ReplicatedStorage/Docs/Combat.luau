@@ -86,7 +86,12 @@ STAMINA  (StaminaService, shared with sprint)
 
 DEFENSE  (DamageService:ResolveHit, in this order)
   1. IFrames      the roll's IFrameStart..IFrameEnd markers -> the hit is ignored.
-  2. Parry        blocking, facing the attacker (BlockAngle), block raised <= ParryWindow ago
+  2. Parry        blocking, facing the attacker (BlockAngle), block raised <= its parry window ago.
+                  Window = ParryWindow (0.3 s), or ParryWindowSpammed (0.07 s) if block was
+                  re-raised within ParrySpamLockout (0.4 s) of releasing it (anti-mash), stored
+                  on the character as BlockParryWindow. Ping compensation: the block's start
+                  time is the client's press time, clamped to at most MaxParryRewind (0.15 s)
+                  before the server got it.
                   -> Sekiro-style posture: the attacker loses attack.PoiseDamage x
                   ParryPoiseMultiplier poise (PoiseService:DrainPoise). If that empties it: full
                   stagger (StaggerTime, crit window). Otherwise a short recoil (ParryRecoilTime

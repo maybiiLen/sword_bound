@@ -17,7 +17,10 @@
 		("Heavy")         must be Charging; charge ratio measured here, not trusted
 	ActionRemote (client -> server)
 		("Roll" | "Backstep", direction)   can act, stamina
-		("Block", true | false)            weapon drawn, can act
+		("Block", true, clientServerTime?) | ("Block", false)   weapon drawn, can act. The block's start
+		                  time is the client's GetServerTimeNow() at the press, clamped to at most
+		                  MaxParryRewind earlier than now (ping compensation). Raising block within
+		                  ParrySpamLockout of releasing it only gets ParryWindowSpammed.
 	HitRemote (client -> server: targetModel, position)
 		Current attack, inside HitStart..HitEnd (+/- HitWindowAllowance), within Reach +
 		ReachTolerance, each target once per swing -> DamageService:ResolveHit.
@@ -87,6 +90,7 @@ type Actor = {
 	lastLightStep: number,
 	lastLightEnd: number,
 	flinchUntil: number,
+	lastBlockRelease: number,
 }
 
 local actors: { [Player]: Actor } = {}
@@ -107,6 +111,7 @@ local function getActor(player: Player): Actor?
 			lastLightStep = 0,
 			lastLightEnd = 0,
 			flinchUntil = 0,
+			lastBlockRelease = -math.huge,
 		}
 		actors[player] = actor
 	end
@@ -121,6 +126,7 @@ local function setState(actor: Actor, state: string)
 	character:SetAttribute(Attr.MoveSpeedMultiplier, CombatConfig.MoveSpeedMultipliers[state] or 1)
 	if state ~= "Blocking" then
 		character:SetAttribute(Attr.BlockStartedAt, nil)
+		character:SetAttribute(Attr.BlockParryWindow, nil)
 	end
 	if state ~= "Rolling" then
 		character:SetAttribute(Attr.IFrames, nil)
@@ -280,7 +286,7 @@ local function onAttack(player: Player, kind: unknown, arg: unknown)
 	end
 end
 
-local function onAction(player: Player, kind: unknown, arg: unknown)
+local function onAction(player: Player, kind: unknown, arg: unknown, arg2: unknown)
 	local actor = getActor(player)
 	if not actor then
 		return
@@ -327,8 +333,21 @@ local function onAction(player: Player, kind: unknown, arg: unknown)
 			end
 			actor.action = nil
 			setState(actor, "Blocking")
-			actor.character:SetAttribute(Attr.BlockStartedAt, workspace:GetServerTimeNow())
+			-- ping compensation: trust the client's press time, but never more than MaxParryRewind back
+			local serverNow = workspace:GetServerTimeNow()
+			local startedAt = serverNow
+			if typeof(arg2) == "number" and arg2 == arg2 then
+				startedAt = math.clamp(arg2, serverNow - CombatConfig.MaxParryRewind, serverNow)
+			end
+			-- anti-mash: re-raising block right after releasing it only gets a tiny window
+			local window = CombatConfig.ParryWindow
+			if now - actor.lastBlockRelease <= CombatConfig.ParrySpamLockout then
+				window = CombatConfig.ParryWindowSpammed
+			end
+			actor.character:SetAttribute(Attr.BlockParryWindow, window)
+			actor.character:SetAttribute(Attr.BlockStartedAt, startedAt)
 		elseif arg == false and actor.state == "Blocking" then
+			actor.lastBlockRelease = now
 			setState(actor, "Idle")
 		end
 	end

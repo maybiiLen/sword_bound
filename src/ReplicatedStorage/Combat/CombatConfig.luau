@@ -49,7 +49,11 @@ local CombatConfig = {
 	} :: { [string]: number },
 
 	-- Defense
-	ParryWindow = 0.2, -- a hit landing within this long of starting a block is parried
+	ParryWindow = 0.3, -- a hit landing within this long of starting a block is parried (was 0.2)
+	ParrySpamLockout = 0.4, -- raising block again within this long of releasing it is "spamming"...
+	ParryWindowSpammed = 0.07, -- ...and only gets this tiny window (Sekiro-style anti-mash)
+	MaxParryRewind = 0.15, -- the client's block timestamp may be up to this much earlier than the
+	                      -- server receiving it (ping compensation for the parry window)
 	BlockAngle = 120, -- degrees in front of you a block covers
 	BlockDamageMultiplier = 0.1, -- damage that gets through a block
 	BlockStaminaPerDamage = 1.6, -- stamina lost per point of blocked damage (x (1 - weapon BlockStability))
@@ -118,6 +122,7 @@ local CombatConfig = {
 		MoveSpeedMultiplier = "MoveSpeedMultiplier", -- read by the Sprint system when it sets WalkSpeed
 		IFrames = "IFrames", -- true while hits pass through (rolls)
 		BlockStartedAt = "BlockStartedAt", -- server time the current block started (nil = not blocking)
+		BlockParryWindow = "BlockParryWindow", -- parry window of the current block (ParryWindow or ParryWindowSpammed)
 		Poise = "Poise",
 		MaxPoise = "MaxPoise",
 		XPReward = "XPReward", -- on any NPC model: XP granted to whoever lands the killing blow

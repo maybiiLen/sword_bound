@@ -440,7 +440,7 @@ function startBlock()
 	setState("Blocking")
 	movement:SetFacing(nil)
 	weapon:SetBlocking(true)
-	Remotes.ActionRemote:FireServer("Block", true)
+	Remotes.ActionRemote:FireServer("Block", true, workspace:GetServerTimeNow()) -- press time, for ping-fair parries
 end
 
 local function request(kind: string, fromPress: number?)

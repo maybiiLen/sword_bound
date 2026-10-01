@@ -14,7 +14,8 @@
 		Resolution order:
 			1. target has IFrames (rolling)          -> "Dodged", nothing happens
 			2. target blocking and facing attacker:
-			   block started <= ParryWindow ago     -> "Parried": attacker loses PoiseDamage x ParryPoiseMultiplier
+			   block started <= the block's parry window ago (BlockParryWindow attribute: ParryWindow, or
+			   ParryWindowSpammed if re-raised right after releasing) -> "Parried": attacker loses PoiseDamage x ParryPoiseMultiplier
 		                                          poise; empty = full stagger, else ParryRecoilTime recoil.
 		                                          <= PerfectParryWindow = "PerfectParry" effects.
 			   otherwise                            -> "Blocked": BlockDamageMultiplier chip damage,
@@ -125,7 +126,11 @@ function DamageService:ResolveHit(hit): (string, number)
 	local blockStartedAt = target:GetAttribute(Attr.BlockStartedAt)
 	if typeof(blockStartedAt) == "number" and isFacing(target, attackerModel) then
 		local sinceBlock = workspace:GetServerTimeNow() - blockStartedAt
-		if sinceBlock <= CombatConfig.ParryWindow then
+		local parryWindow = target:GetAttribute(Attr.BlockParryWindow)
+		if typeof(parryWindow) ~= "number" then
+			parryWindow = CombatConfig.ParryWindow -- NPC blockers and older callers
+		end
+		if sinceBlock <= parryWindow then
 			local perfect = sinceBlock <= CombatConfig.PerfectParryWindow
 			if attackerModel then
 				-- Sekiro-style: a parry drains the attacker's poise; only an empty bar is a full stagger,
