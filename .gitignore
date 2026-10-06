@@ -12,3 +12,8 @@ sourcemap.json
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# Obsidian per-device UI state (vault/ is an Obsidian vault)
+vault/.obsidian/workspace*.json
+vault/.obsidian/cache
+vault/.trash/
