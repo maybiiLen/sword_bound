@@ -34,8 +34,9 @@ local PoiseService = require(script.Parent.PoiseService)
 local Remotes = Combat.Remotes
 
 local ATTACKS = {
-	{ Animation = "KnightSlash", Damage = 10, PoiseDamage = 22, Reach = 7, Arc = 150, Sound = "Swing", Weight = 2 },
-	{ Animation = "KnightDelayedChop", Damage = 18, PoiseDamage = 42, Reach = 7.5, Arc = 70, Sound = "HeavySwing", Weight = 1 },
+	-- Weight = how often it is picked; HitWeight = hit effect size ("Light" | "Heavy")
+	{ Animation = "KnightSlash", Damage = 10, PoiseDamage = 22, Reach = 7, Arc = 150, Sound = "Swing", Weight = 2, HitWeight = "Light" },
+	{ Animation = "KnightDelayedChop", Damage = 18, PoiseDamage = 42, Reach = 7.5, Arc = 70, Sound = "HeavySwing", Weight = 1, HitWeight = "Heavy" },
 }
 local WALK_SPEED = 10
 local ATTACK_RANGE = 6.5
@@ -153,6 +154,7 @@ local function attack(knight: Knight, target: Model)
 						Target = humanoid,
 						Damage = chosen.Damage,
 						PoiseDamage = chosen.PoiseDamage,
+						Weight = chosen.HitWeight,
 						Position = root.Position + Vector3.new(0, 0.5, 0),
 					})
 				end

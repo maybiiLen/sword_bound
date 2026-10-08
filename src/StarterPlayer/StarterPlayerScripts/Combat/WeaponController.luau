@@ -665,7 +665,15 @@ local function startRiposte(target: Model): boolean
 				return
 			end
 			local position = targetRoot.Position
-			Effects.HitSpark(position)
+			-- same damage type and size the server sends to everyone else
+			local damageType = riposte.DamageType or weapon.Definition.DamageType or "Slash"
+			local look = (root :: BasePart).CFrame
+			Effects.HitSpark(position, {
+				DamageType = damageType,
+				Weight = "Heavy",
+				Target = target,
+				Direction = if damageType == "Pierce" then look.LookVector else look.RightVector,
+			})
 			Effects.FlashModel(target, Color3.fromRGB(255, 60, 60), 0.35)
 			Effects.HitStop(weapon:GetAttackTrack(), CombatConfig.HitStop.Heavy * 1.6)
 			Effects.Shake(CombatConfig.Shake.Heavy)

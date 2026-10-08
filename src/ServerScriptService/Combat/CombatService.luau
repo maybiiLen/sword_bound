@@ -116,6 +116,15 @@ type Actor = {
 }
 
 local CONTEXT_ATTACKS = { RunningAttack = true, JumpAttack = true, RollAttack = true, GuardCounter = true }
+
+-- longest hitstop any client can play on one hit (keep the server hit window in step with it)
+local MAX_HITSTOP = CombatConfig.HitStop.Heavy
+for _, stops in CombatConfig.ClassHitStop do
+	for _, seconds in stops do
+		MAX_HITSTOP = math.max(MAX_HITSTOP, seconds)
+	end
+end
+MAX_HITSTOP += CombatConfig.CounterHitStop
 local ROLL_ANIMATIONS = { Roll = true, RollBack = true, RollLeft = true, RollRight = true }
 
 local actors: { [Player]: Actor } = {}
@@ -448,6 +457,7 @@ local function onAttack(player: Player, kind: unknown, arg: unknown)
 				DamageType = CombatRules.DamageTypeOf(riposte, definition),
 				CritMultiplier = definition.CritMultiplier,
 				GuardDamage = definition.GuardDamage,
+				Weight = "Heavy",
 			})
 		end)
 		task.delay(action.length, function()
@@ -552,8 +562,9 @@ local function onHit(player: Player, target: unknown, position: unknown)
 	local allowance = CombatConfig.HitWindowAllowance
 	local elapsed = os.clock() - action.start
 	local windowStart = action.hitStart - allowance
-	-- hit-stop freezes the client's timeline, so a multi-target swing reports later than real time
-	local windowEnd = action.hitEnd + allowance + CombatConfig.HitStop.Heavy * 2
+	-- hit-stop freezes the client's timeline, so a multi-target swing reports later than real time:
+	-- allow two of the longest freezes the client can play (class hitstop + counter bonus)
+	local windowEnd = action.hitEnd + allowance + MAX_HITSTOP * 2
 	if elapsed < windowStart or elapsed > windowEnd then
 		CombatService.HitRejected:Fire(player, string.format("outside hit window (%.2fs, window %.2f-%.2f)", elapsed, windowStart, windowEnd))
 		return
@@ -595,6 +606,7 @@ local function onHit(player: Player, target: unknown, position: unknown)
 		DamageType = CombatRules.DamageTypeOf(attack, definition),
 		CritMultiplier = definition.CritMultiplier,
 		GuardDamage = definition.GuardDamage,
+		Weight = attack.Weight,
 	})
 	CombatService.HitConfirmed:Fire(player, target, result, dealt)
 end

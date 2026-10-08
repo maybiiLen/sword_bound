@@ -104,9 +104,10 @@ CHARACTER VIEW
   calls InventoryCamera.Enter() on open and .Exit() on close. While open:
     - the camera locks onto the character from a 3/4 front angle, framed at the left of the screen
       above the stats panel and turned toward the menu; it follows the character if it moves
-    - the character keeps animating, so pressing E draws the sword in its hand
+    - the character keeps animating, and the equipped sword stays drawn in its hand the whole time
     - walking/jumping input (WASD, arrows, Space, left stick, A button) is blocked by a
-      high-priority ContextActionService sink; combat keys like E and Q are not
+      high-priority ContextActionService sink, and every combat key (attack, block, roll, lock-on and E)
+      is swallowed by InventoryWeaponDisplay (client-side only; the server does not know the panel is open)
     - the cursor is freed even if the combat camera had locked it
   Exit() restores the previous camera (type, position, field of view) and the movement input.
   WEAPON IN HAND: InventoryWeaponDisplay (called by InventoryController next to InventoryCamera) draws the
@@ -117,7 +118,8 @@ CHARACTER VIEW
     - equip a different weapon while open: WeaponService:Equip puts the new one on the back (WeaponDrawn is
       reset), then InventoryWeaponDisplay draws it again (~0.2 s later)
     - close: puts it back the way it was (sheathed if it was sheathed before, still drawn if it was drawn)
-    - pressing E while open still toggles it and is not fought
+    - pressing E while open does nothing: ToggleWeaponInputs is blocked (press only; releases pass), so the
+      sword can't be sheathed and redrawn. The module's own requests use EquipRemote directly and are not blocked
   Framing numbers (FOV, screen position, camera angle, easing) are constants at the top of
   InventoryCamera. A wall between the character and the camera pulls the camera in closer.
   Roblox's default PlayerModule is NOT used (it is not present in this game's PlayerScripts).
@@ -137,3 +139,4 @@ NOT BUILT YET
 ]]
 
 return {}
+

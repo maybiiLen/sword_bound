@@ -332,6 +332,36 @@ EFFECTS
            1-2 frame high-contrast impact frame for cameras within 60 studs.
     Block  small pale spark and a dull low clunk.
   Hits and blocks get a small random pitch per play so repeats don't sound identical.
+  Hit effects by damage type (2026-10-08, Combat.VFX):
+    Slash   white flash, blue streaks along the swing, a crescent slash sprite
+    Strike  warm cross flare, gravity sparks, dust flipbook, shockwave ring
+    Pierce  flash, one long spike plus a tight cone of streaks along the thrust
+    Counter any of the above recolored red + a 0.1 s white flash on the victim (counter hits
+            also add CombatConfig.CounterHitStop to the attacker's hitstop)
+    The attacker predicts its own (damage type from the attack, counter from the target's
+    CombatState); others get EffectRemote ("Hit", position, target, damageType, counter, weight).
+    Emitters are pooled per recipe in Workspace.CombatVFX (CombatConfig.VFX.PoolSize) and Emit
+    counts scale with the graphics quality level. Colors and tuning: CombatConfig.VFX.
+  Hitstop per weapon class and Weight: CombatConfig.ClassHitStop (falls back to HitStop).
+  Swing trail look per class: CombatConfig.ClassTrails, applied by Effects.StyleTrail when the
+  weapon behavior is built.
+  Textures: Combat.VFXTextures (white-with-alpha images made by CombatDev TextureForge).
+
+WEAPONFORGE  (ServerStorage.CombatDev.WeaponForge, dev only, 2026-10-08)
+  Weapon models are generated from code, the same way animations come from Specs:
+    MeshKit        loft, lathe, chamfered extrude, tube sweep, smoothing by angle -> EditableMesh
+    Parts          blade (edge bevels + fuller), grip wraps, gems, plates, rings
+    Specs          one entry per weapon: regions + materials + attachment points
+    Forge          Preview / Install; Install(name, true) publishes each region as a Mesh asset
+                   with AssetService:CreateAssetAsync (Studio beta "CreateAssetAsync Lua API") and
+                   builds the model in Assets.WeaponModels with the MODEL CONVENTION below
+    TextureForge   procedural VFX textures, PublishAll() -> ids for Combat.VFXTextures
+  Use: local wf = game.ServerStorage.CombatDev.WeaponForge:Clone()
+       require(wf.Forge).Install("ForgeSword", true)
+  Models built so far: ForgeSword (StarterSword uses it), ForgeDagger, ForgeRapier,
+  ForgeGreatsword, ForgeGreataxe (580 to 1,444 tris). Each region (Blade, Edge, Fuller, Guard,
+  Grip, Trim, Gem) is its own MeshPart, so colors/materials stay editable and a Sword Skill can
+  light just the Edge or Fuller. Published mesh ids are stored on the model as ForgeMeshIds.
 
 TRAINING DUMMY
   Workspace.TrainingDummy, tagged "TrainingDummy", 100 HP, XPReward 50, respawns (DummyService).

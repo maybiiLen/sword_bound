@@ -13,6 +13,7 @@
 			DamageType: string?,        -- "Slash" (default) | "Strike" | "Pierce" (CombatConfig.DamageTypes)
 			CritMultiplier: number?,    -- the attacker's weapon class value (CombatConfig.CritMultiplier if nil)
 			GuardDamage: number?,       -- x stamina a blocker loses (1 if nil)
+			Weight: string?,            -- "Light" | "Heavy": hit effect size on other clients
 		}
 		The math lives in Combat.CombatRules (shared with the unit tests).
 		Resolution order:
@@ -88,10 +89,12 @@ local function rootOf(model: Model?): BasePart?
 	return if root and root:IsA("BasePart") then root else nil
 end
 
-local function fireEffect(kind: string, position: Vector3, except: Player?, model: Model?)
+-- EffectRemote to every client except `except` (the attacker already played it locally).
+-- "Hit" extras: targetModel, damageType, counter, weight, direction (Effects.Listen -> Combat.VFX).
+local function fireEffect(kind: string, position: Vector3, except: Player?, ...)
 	for _, other in Players:GetPlayers() do
 		if other ~= except then
-			Remotes.EffectRemote:FireClient(other, kind, position, model)
+			Remotes.EffectRemote:FireClient(other, kind, position, ...)
 		end
 	end
 end
@@ -234,7 +237,14 @@ function DamageService:ResolveHit(hit): (string, number)
 
 	humanoid:TakeDamage(amount)
 	self.Damaged:Fire(attacker, humanoid, amount, info)
-	fireEffect("Hit", position, attackerPlayer)
+	-- effect direction: along the thrust for Pierce, across the swing otherwise (what the
+	-- attacker's own client uses), so every client draws the sparks the same way
+	local attackerRoot = rootOf(attackerModel)
+	local direction = nil
+	if attackerRoot then
+		direction = if damageType == "Pierce" then attackerRoot.CFrame.LookVector else attackerRoot.CFrame.RightVector
+	end
+	fireEffect("Hit", position, attackerPlayer, target, damageType, isCounter, hit.Weight or "Light", direction)
 
 	if humanoid.Health > 0 and (hit.PoiseDamage or 0) > 0 then
 		local poiseDamage = hit.PoiseDamage

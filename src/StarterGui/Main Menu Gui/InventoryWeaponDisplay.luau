@@ -3,6 +3,8 @@
 	While the Inventory is open, the equipped weapon is shown DRAWN in the live character's hand, so the
 	weapon you equip is the one you see. It uses the normal draw/sheath request (EquipRemote "Toggle"),
 	so the server stays in charge and the draw animation / other players behave as usual.
+	The weapon STAYS in the hand the whole time the panel is open: the draw/sheathe key (E) is blocked
+	while open, so it can't be toggled off and back on.
 
 		InventoryWeaponDisplay.Enter()   remember whether the weapon was drawn, draw it if it wasn't,
 		                                 and block attack / block / roll / lock-on input
@@ -11,12 +13,13 @@
 
 	Equipping a different weapon while the panel is open makes the server put the new one on the back
 	(WeaponService:Equip resets WeaponDrawn); this module then draws it again. Pressing E while the
-	inventory is open still works and is respected (it is not fought).
+	inventory is open does nothing (see NO COMBAT WHILE OPEN).
 
 	NO COMBAT WHILE OPEN: a high-priority ContextActionService action swallows the BEGIN of the combat
-	inputs in CombatConfig (AttackInputs, BlockInputs, RollInputs, LockOnInputs), so the character cannot
-	swing, block, roll or lock on. Releases still pass through so nothing gets stuck, and the draw/sheathe
-	key (ToggleWeaponInputs) is left alone. Clicks on the inventory's own buttons are unaffected.
+	inputs in CombatConfig (AttackInputs, BlockInputs, RollInputs, LockOnInputs, ToggleWeaponInputs), so the
+	character cannot swing, block, roll, lock on or sheathe/redraw the weapon with E. Releases still pass
+	through so nothing gets stuck. This module's own draw/sheathe requests go straight to EquipRemote, so
+	they are not affected by the block. Clicks on the inventory's own buttons are unaffected.
 	Called by InventoryController. See Docs.Inventory > CHARACTER VIEW.
 ]]
 
@@ -44,10 +47,16 @@ local requestId = 0 -- a newer request cancels an older retry loop
 local weaponConnection: RBXScriptConnection? = nil
 local characterConnection: RBXScriptConnection? = nil
 
--- every input that starts a combat action (the draw/sheathe key is deliberately not in here)
+-- every input that starts a combat action, including the draw/sheathe key (E): the weapon must stay drawn while open
 local function combatInputs(): { any }
 	local inputs = {}
-	for _, list in { CombatConfig.AttackInputs, CombatConfig.BlockInputs, CombatConfig.RollInputs, CombatConfig.LockOnInputs } do
+	for _, list in {
+		CombatConfig.AttackInputs,
+		CombatConfig.BlockInputs,
+		CombatConfig.RollInputs,
+		CombatConfig.LockOnInputs,
+		CombatConfig.ToggleWeaponInputs,
+	} do
 		for _, input in list do
 			table.insert(inputs, input)
 		end
@@ -139,3 +148,4 @@ function InventoryWeaponDisplay.Exit()
 end
 
 return InventoryWeaponDisplay
+

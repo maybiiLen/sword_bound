@@ -46,6 +46,16 @@ QUICK HOW-TOS
   Read a player's level:      player:GetAttribute("ClassLevel") / ("Level_Sword") anywhere
 
 CHANGELOG  (newest first; one line per change, with your name)
+  2026-10-08  Henry  Weapons + effects round 1: new ServerStorage.CombatDev.WeaponForge builds weapon models from
+                     code and publishes the meshes (5 class weapons: ForgeSword, ForgeDagger, ForgeRapier,
+                     ForgeGreatsword, ForgeGreataxe; StarterSword now uses ForgeSword). New Combat.VFX: hit effects
+                     by damage type (Slash/Strike/Pierce), red counter-hit flash, per-class hitstop and trails,
+                     pooled + quality-scaled, procedural textures in Combat.VFXTextures. See Docs.Combat > EFFECTS
+                     and WEAPONFORGE. (via Claude)
+  2026-10-08  Henry  Inventory: the sword now stays drawn in the character's hand the whole time the panel is open.
+                     InventoryWeaponDisplay also swallows the draw/sheathe key (E, ToggleWeaponInputs) while open,
+                     next to attack/block/roll/lock-on and walking input (all client-side only). See Docs.Inventory >
+                     CHARACTER VIEW. (via Claude)
   2026-10-08  Henry  Combat Phase 0 (shared rules for new weapon classes): new Combat.CombatRules (pure math,
                      unit tested by ServerStorage.CombatDev.Tests). Damage types Slash/Strike/Pierce, counter
                      hits (target mid-attack: 1.1x, Pierce 1.3x), armor windows (Armor / HyperArmor: no flinch,

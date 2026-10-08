@@ -10,8 +10,11 @@
 	API:
 		Effects.PlaySound(parent, soundName)            Sound from Combat.Assets.Sounds
 		Effects.SetTrail(character, enabled)            the SwingTrail on the character's weapon
-		Effects.HitSpark(position)
+		Effects.HitSpark(position, info?)               layered hit effect by damage type (Combat.VFX):
+		                                                info = { DamageType, Counter, Weight, Direction, Target }
+		                                                (no info = Slash); counter hits flash the target
 		Effects.BlockSpark(position)                    pale sparks + clang
+		Effects.StyleTrail(model, class)                per-class SwingTrail look (CombatConfig.ClassTrails)
 		Effects.ParryFlash(position, perfect?, attacker?)   gold spark burst + star flash + shockwave, layered
 		                                                clang whose pitch rises on consecutive parries,
 		                                                gold flash + short freeze on the attacker; perfect
@@ -26,7 +29,7 @@
 
 	EffectRemote payloads (server -> client):
 		("Swing", character, soundName, trailStart, trailDuration)
-		("Hit", position)
+		("Hit", position, targetModel?, damageType?, counter?, weight?, direction?)
 		("Block", position)
 		("Parry" | "PerfectParry", position, attackerModel?)
 		("Draw", character, drawn)
@@ -41,6 +44,7 @@ local TweenService = game:GetService("TweenService")
 
 local Combat = ReplicatedStorage.Combat
 local CombatConfig = require(Combat.CombatConfig)
+local VFX = require(Combat.VFX)
 local Sounds = Combat.Assets.Sounds
 local HitSparkTemplate = Combat.Assets.VFX.HitSpark
 
@@ -141,13 +145,29 @@ local function starFlash(holder: BasePart, color: Color3, size: number)
 	star:Emit(2)
 end
 
-function Effects.HitSpark(position: Vector3)
-	burst(position, nil, 1, "Hit", randomPitch(0.06))
+-- a sound at a point in the world (no visible holder)
+local function soundAt(position: Vector3, soundName: string, pitchScale: number?)
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "EffectSound"
+	attachment.WorldPosition = position
+	attachment.Parent = workspace.Terrain
+	Effects.PlaySound(attachment, soundName, pitchScale)
+	Debris:AddItem(attachment, 3)
+end
+
+function Effects.HitSpark(position: Vector3, info: any?)
+	VFX.Impact(position, info or { DamageType = "Slash" })
+	soundAt(position, "Hit", randomPitch(0.06))
 end
 
 -- Blocks stay deliberately dull (small pale spark, low clunk) so a parry is obvious by ear alone.
 function Effects.BlockSpark(position: Vector3)
-	burst(position, Color3.fromRGB(200, 215, 230), 0.8, "Block", randomPitch(0.04))
+	VFX.Block(position)
+	soundAt(position, "Block", randomPitch(0.04))
+end
+
+function Effects.StyleTrail(model: Instance?, class: string?)
+	VFX.StyleTrail(model, class)
 end
 
 function Effects.FlashModel(model: Instance?, color: Color3, seconds: number)
@@ -270,16 +290,24 @@ function Effects.Listen()
 			if typeof(character) ~= "Instance" then
 				return
 			end
+			-- other players' WeaponForge weapons get their class trail too (cheap, idempotent)
+			VFX.StyleTrail(character:FindFirstChild(CombatConfig.WeaponModelName))
 			Effects.PlaySound(character:FindFirstChild("HumanoidRootPart"), soundName)
 			task.delay(trailStart or 0, function()
 				Effects.SetTrail(character, true)
 				task.delay(trailDuration or 0.2, Effects.SetTrail, character, false)
 			end)
 		elseif kind == "Hit" or kind == "Block" or kind == "Parry" or kind == "PerfectParry" then
-			local position, model = ...
+			local position, model, damageType, counter, weight, direction = ...
 			if typeof(position) == "Vector3" then
 				if kind == "Hit" then
-					Effects.HitSpark(position)
+					Effects.HitSpark(position, {
+						DamageType = if typeof(damageType) == "string" then damageType else "Slash",
+						Counter = counter == true,
+						Weight = if typeof(weight) == "string" then weight else "Light",
+						Target = if typeof(model) == "Instance" then model else nil,
+						Direction = if typeof(direction) == "Vector3" then direction else nil,
+					})
 				elseif kind == "Block" then
 					Effects.BlockSpark(position)
 				else
@@ -301,3 +329,4 @@ function Effects.Listen()
 end
 
 return Effects
+

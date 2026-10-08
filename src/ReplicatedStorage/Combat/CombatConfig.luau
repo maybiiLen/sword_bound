@@ -123,6 +123,45 @@ local CombatConfig = {
 	Shake = { Light = 0.25, Heavy = 0.6, Block = 0.2, Parry = 0.45, PerfectParry = 0.7, Stagger = 0.5 } :: { [string]: number },
 	Punch = { Parry = 0.3, PerfectParry = 0.6 } :: { [string]: number }, -- camera punch (studs) for the parrier
 
+	-- Hitstop per weapon class and attack Weight (2026-10-08). Heavier classes freeze longer; base
+	-- values stay at or under 0.18 s and a counter adds CounterHitStop (max 0.22 s), inside the
+	-- research range (sweet spot 0.1-0.2 s, discomfort near 0.54 s). Falls back to HitStop[Weight]
+	-- for classes not listed. CombatService widens its hit window from these values.
+	ClassHitStop = {
+		Dagger = { Light = 0.05, Heavy = 0.08 },
+		Sword = { Light = 0.07, Heavy = 0.12 },
+		Rapier = { Light = 0.06, Heavy = 0.1 },
+		Greatsword = { Light = 0.1, Heavy = 0.16 },
+		Greataxe = { Light = 0.11, Heavy = 0.18 },
+	} :: { [string]: { [string]: number } },
+	CounterHitStop = 0.04,
+
+	-- Swing trail look per weapon class (VFX.StyleTrail). Sequences are { time, value } pairs.
+	ClassTrails = {
+		Dagger = { Lifetime = 0.08, WidthScale = { { 0, 0.7 }, { 1, 0.1 } }, Transparency = { { 0, 0.2 }, { 0.4, 0.55 }, { 1, 1 } }, Color = "#9FD8FF", TipColor = "#FFFFFF" },
+		Sword = { Lifetime = 0.12, WidthScale = { { 0, 1 }, { 1, 0.2 } }, Transparency = { { 0, 0.15 }, { 0.3, 0.5 }, { 1, 1 } }, Color = "#8FD3FF", TipColor = "#FFFFFF" },
+		Rapier = { Lifetime = 0.06, WidthScale = { { 0, 0.5 }, { 1, 0.1 } }, Transparency = { { 0, 0.15 }, { 0.4, 0.5 }, { 1, 1 } }, Color = "#FFF1B8", TipColor = "#FFFFFF" },
+		Greatsword = { Lifetime = 0.22, WidthScale = { { 0, 1 }, { 1, 0.25 } }, Transparency = { { 0, 0.1 }, { 0.3, 0.45 }, { 1, 1 } }, Color = "#FFB27A", TipColor = "#FFF4E6" },
+		Greataxe = { Lifetime = 0.16, WidthScale = { { 0, 1 }, { 1, 0.3 } }, Transparency = { { 0, 0.1 }, { 0.3, 0.45 }, { 1, 1 } }, Color = "#FF9A6A", TipColor = "#FFF4E6" },
+	},
+
+	-- Combat.VFX tuning (hit sparks by damage type; values from the VFX cookbook in the vault)
+	VFX = {
+		PoolSize = 6, -- pooled holders kept per effect recipe
+		AutomaticQualityScale = 0.7, -- Emit multiplier when graphics quality is Automatic
+		HeavyEmitScale = 1.4,
+		CounterEmitScale = 1.3,
+		CounterFlashTime = 0.1, -- white Highlight on a counter-hit victim
+		Palette = {
+			Slash = { core = "#F2FAFF", glow = "#7FD4FF" },
+			Strike = { core = "#FFF0D6", glow = "#FF9A3C", dust = "#8A7A66" },
+			Pierce = { core = "#FFFFE6", glow = "#FFD84A" },
+			Block = { core = "#FFF3DA", glow = "#FFC873" },
+			Counter = "#FF3B2F",
+			CounterCore = "#FFE3E0",
+		},
+	},
+
 	-- Server validation
 	HitWindowAllowance = 0.25, -- seconds of slack either side of a hit window (network jitter)
 	ReachTolerance = 4, -- studs added to a weapon's Reach before a hit is rejected

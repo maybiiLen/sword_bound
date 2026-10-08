@@ -11,7 +11,7 @@ return {
 	Id = "StarterSword",
 	DisplayName = "Anneal Blade",
 	Class = "Sword",
-	Model = "StarterSword",
+	Model = "ForgeSword", -- WeaponForge model (2026-10-08); the old part-built "StarterSword" model is kept in WeaponModels
 	Damage = 12,
 	Reach = 7,
 	ComboResetTime = 0.6,
@@ -66,3 +66,4 @@ return {
 
 	Skills = {},
 }
+
