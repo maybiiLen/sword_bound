@@ -16,6 +16,7 @@
 		Version         shared     (bump if you need a migration)
 		EquippedWeapon  combat     WeaponService
 		Classes         combat     ProgressionService   { [classId] = { Level, XP } }
+		Inventory       inventory  InventoryService     { Weapons = { [weaponId] = true } }  (owned weapons)
 
 	See Docs.PlayerData.
 ]]
@@ -24,4 +25,8 @@ return {
 	Version = 1,
 	EquippedWeapon = "TestSword",
 	Classes = {},
+	Inventory = {
+		-- Weapons the player owns (EquipRemote "Equip" is gated on this). New players start with both.
+		Weapons = { TestSword = true, StarterSword = true },
+	},
 }

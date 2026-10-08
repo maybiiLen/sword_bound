@@ -9,7 +9,7 @@ return {
 	DisplayName = "Test Sword",
 	Class = "Sword",
 	Model = "TestSword",
-	Damage = 12,
+	Damage = 24,
 	Reach = 7,
 	ComboResetTime = 0.6,
 	BlockStability = 0.5,

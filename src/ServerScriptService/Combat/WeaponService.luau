@@ -11,8 +11,8 @@
 
 	Remote: Combat.Remotes.EquipRemote
 		client -> server ("Toggle")            draw if sheathed, sheath if drawn
-		client -> server ("Equip", weaponId)   NOTE: any registered weapon for now; gate this on
-		                                       inventory ownership once inventory exists
+		client -> server ("Equip", weaponId)   only weapons the player owns (InventoryService), and only
+		                                       while not mid-attack/block (CombatState Idle)
 
 	API:
 		:Equip(player, weaponId) -> boolean
@@ -32,6 +32,7 @@ local Combat = ReplicatedStorage.Combat
 local CombatConfig = require(Combat.CombatConfig)
 local WeaponRegistry = require(Combat.WeaponRegistry)
 local PlayerDataService = require(ServerScriptService.PlayerData.PlayerDataService)
+local InventoryService = require(ServerScriptService.Inventory.InventoryService)
 local ProgressionService = require(script.Parent.ProgressionService)
 
 local Attr = CombatConfig.Attributes
@@ -219,6 +220,14 @@ function WeaponService:Start()
 			current.lastToggle = now
 			WeaponService:SetDrawn(player, not WeaponService:IsDrawn(player))
 		elseif action == "Equip" and typeof(weaponId) == "string" then
+			local character = player.Character
+			local state = character and character:GetAttribute(Attr.CombatState)
+			if (state ~= nil and state ~= "Idle") or not InventoryService:Owns(player, weaponId) then
+				return
+			end
+			if character and character:GetAttribute(Attr.EquippedWeapon) == weaponId then
+				return -- already equipped
+			end
 			WeaponService:Equip(player, weaponId)
 		end
 	end)

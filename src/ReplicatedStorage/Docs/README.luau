@@ -11,6 +11,8 @@ PAGES
   Docs.Combat        swords, combos, hitboxes, server validation, adding weapons
   Docs.Progression   FF14-style classes (weapon type = class), levels 1-20, XP
   Docs.PlayerData    saving (ProfileStore) - how ANY system adds saved fields
+  Docs.Inventory     owned weapons, the Inventory panel, ownership-gated equipping
+  Docs.Abilities     ability hotbar (3 slots + ultimate bar), preview mode, how to hook up real abilities
   Docs.Sprint        sprint + stamina
   Docs.Roadmap       Floor 1 build list (snapshot of the Google Sheet) + new floor checklist
 
@@ -25,6 +27,9 @@ SYSTEM INDEX
   Sprint        Henry     ReplicatedStorage.Sprint, ServerScriptService.SprintServer,
                           StarterPlayerScripts.SprintClient, StarterGui.SprintGui
   Shared utils  shared    ReplicatedStorage.Shared.Util (Signal, Trove)
+  Inventory     Henry     ReplicatedStorage.Inventory, ServerScriptService.Inventory,
+                          StarterGui.Main Menu Gui.InventoryItemsController
+  Abilities     Henry     ReplicatedStorage.Abilities, StarterGui.AbilityHud
   SAO HUD       teammate  StarterGui.SAO_HUD, StarterPlayerScripts.HealthBarController
   (add your system here when you create one)
 
@@ -41,6 +46,46 @@ QUICK HOW-TOS
   Read a player's level:      player:GetAttribute("ClassLevel") / ("Level_Sword") anywhere
 
 CHANGELOG  (newest first; one line per change, with your name)
+  2026-10-05  Henry  New StarterGui.Main Menu Gui.InventoryWeaponDisplay: while the inventory is open the equipped
+                     weapon is drawn into the live character's hand (a different weapon you equip is drawn too);
+                     closing puts it back as it was. InventoryController calls Enter()/Exit(). See Docs.Inventory >
+                     CHARACTER VIEW > WEAPON IN HAND. (via Claude)
+  2026-10-04  Henry  Inventory CONTENTS now taper too (small per-element rotations + column stretch; originals
+                     saved in Taper* attributes). InventoryController now forces the panel closed at startup
+                     (it had been saved visible, so the first open skipped the camera and hid the HUD from the
+                     start). See Docs.Inventory > TAPER. (via Claude)
+  2026-10-04  Henry  Inventory panels now taper like the reference (a little smaller toward the middle of the
+                     screen, taller toward the edges) with slice-built shapes: StatsPanel.Shape and
+                     InventoryPanel.RightShape. The earlier rotation was removed (Rotation = 0) and the weapon
+                     grid scrolls natively again (PAGED_GRID = false). See Docs.Inventory > TAPER. (via Claude)
+  2026-10-03  Henry  Inventory now shows the LIVE character: new StarterGui.Main Menu Gui.InventoryCamera
+                     locks the camera onto the real character (left of screen, facing the menu) while the
+                     inventory is open, blocks walking input and frees the cursor; InventoryController no
+                     longer builds a duplicate in a ViewportFrame. See Docs.Inventory > CHARACTER VIEW.
+                     (via Claude)
+  2026-10-03  Henry  Inventory layout now matches the reference: character + stats float at the left, the
+                     Equipment panel (title, tabs, slot list, detail card, grid) sits at the right with a gap
+                     between. New InventoryHudHider script hides all other HUDs/menus (incl. Roblox chat,
+                     player list) while the inventory is open and restores them on close. See Docs.Inventory
+                     > SCREEN LAYOUT, HUD HIDING. (via Claude)
+  2026-10-02  Henry  Inventory screen revamp (dark, SAO-style): character + stats, weapon/armor slot list,
+                     detail card with Equip button, categorized grid with Sort. Rebuilt InventoryPanel in
+                     place; InventoryItemsController rewritten, InventoryTabController recolored (dark,
+                     per-tab title). Armor/stats/MODs are placeholders. See Docs.Inventory > SCREEN LAYOUT.
+                     (via Claude)
+  2026-10-02  Henry  Ability hotbar HUD: StarterGui.AbilityHud + ReplicatedStorage.Abilities (AbilityConfig,
+                     AbilityHudController). 3 ability slots with red cooldown fill and an ultimate bar; no
+                     abilities exist yet, so AbilityConfig.PreviewMode fakes cooldowns/charge. See
+                     Docs.Abilities. (via Claude)
+  2026-10-02  Henry  Inventory icons were invisible: Main Menu Gui uses ZIndexBehavior.Global, so slot icon,
+                     name and equipped marker (ZIndex 1/5) drew behind the slots (ZIndex 11). They are now
+                     slot.ZIndex + 1/2/3 in InventoryItemsController. See Docs.Inventory > UI NOTES. (via Claude)
+  2026-10-01  Henry  Inventory (weapons): DataTemplate.Inventory.Weapons, InventoryService, Inventory panel
+                     item grid + Weapon slot (InventoryItemsController); EquipRemote "Equip" now requires
+                     ownership and Idle state. See Docs.Inventory. (via Claude)
+  2026-10-01  Henry  TestSword (imported mesh) added as a weapon (Weapons/TestSword + WeaponModels/TestSword)
+                     and made the default: CombatConfig.DefaultWeapon and DataTemplate.EquippedWeapon.
+                     (via Claude)
   2026-10-01  Henry  Directional rolls while locked on (RollBack / RollLeft / RollRight, keep facing the
                      target); same i-frames, cost and cancel timing as Roll. (via Claude)
   2026-10-01  Henry  Contextual attacks: running, jump (plunge), roll and guard counter, as weapon fields

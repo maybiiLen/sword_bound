@@ -28,7 +28,7 @@ WHERE THINGS ARE
     Remotes/              EquipRemote, AttackRemote, ActionRemote, HitRemote, ReactRemote,
                           EffectRemote, LevelUpRemote
     Assets/AnimSaves      KeyframeSequences built from Specs (Studio-only playback until published)
-    Assets/WeaponModels   WeaponTemplate (copy me), StarterSword
+    Assets/WeaponModels   WeaponTemplate (copy me), StarterSword, TestSword
     Assets/VFX            HitSpark
     Assets/Sounds         Swing, Lunge, HeavySwing, Draw, Sheath, Hit, Block, Parry, Roll, GuardBreak
   ServerScriptService.Combat
@@ -210,7 +210,8 @@ ADDING A NEW SWORD  (no code)
   2. Definition: duplicate Weapons/StarterSword, rename it to the SAME name as its Id.
      Set Model = your model name, tweak Damage / Reach / Combo / Heavy / BlockStability.
      Keep Class = "Sword". Reuse the existing animation names or add new ones to Specs.
-  3. Test: EquipRemote:FireServer("Equip", "<Id>") from a client, or set the player's
+  3. Test: EquipRemote:FireServer("Equip", "<Id>") from a client (the player must own it:
+     InventoryService:GrantWeapon, or add it to DataTemplate.Inventory.Weapons), or set the player's
      data.EquippedWeapon. WeaponRegistry warns in Output if anything is misnamed.
 
 MODEL CONVENTION  (Assets/WeaponModels/*)
@@ -293,7 +294,7 @@ PLACEHOLDERS TO REPLACE
 
 NOT BUILT YET (designed for)
   Sword Skills (definition.Skills), ripostes/backstabs, damage numbers, jump attacks,
-  inventory (EquipRemote "Equip" currently accepts any registered weapon - gate it on ownership).
+  (Inventory now exists: EquipRemote "Equip" is gated on ownership, see Docs.Inventory.)
 ]]
 
 return {}
