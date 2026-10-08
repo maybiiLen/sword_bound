@@ -15,6 +15,9 @@ Focus is core fighting only. Swords are the only weapon so far, and everything m
 
 ## Plan
 
+Items 5 to 7 are now part of the bigger roadmap in [[Weapons and sword skills plan]] (2026-10-08).
+
+
 - [x] 1. Parry window fix ([[2026-10-01]])
 - [x] 2. Riposte on posture-broken or guard-broken enemies ([[2026-10-01]])
 - [x] 3. Contextual attacks: running, jump, roll attack, guard counter ([[2026-10-01]])
