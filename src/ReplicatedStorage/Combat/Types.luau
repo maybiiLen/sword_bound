@@ -20,6 +20,14 @@ export type AttackDefinition = {
 	HyperArmor: boolean?, -- true: taking a hit doesn't flinch you out of this attack (poise break still does)
 	Sound: string?, -- Sound name in Combat.Assets.Sounds played at swing start
 	Plunge: number?, -- jump attacks: downward speed (studs/s) set on the "Lunge" marker, slams you to the ground
+	DamageType: string?, -- "Slash" | "Strike" | "Pierce" (default: the weapon's DamageType, else Slash)
+	Armor: ArmorDefinition?, -- armor window; HyperArmor = true means Armor = {} (whole action)
+}
+
+export type ArmorDefinition = {
+	Start: number?, -- seconds from the attack's start (default: ArmorStart marker, else 0)
+	End: number?, -- (default: ArmorEnd marker, else the action's MoveOpen/length)
+	DamageTaken: number?, -- x damage taken while up (default CombatConfig.ArmorDamageTaken)
 }
 
 export type HeavyDefinition = AttackDefinition & {
@@ -30,7 +38,8 @@ export type HeavyDefinition = AttackDefinition & {
 
 export type RiposteDefinition = {
 	Animation: string, -- markers: Lunge, HitStart (damage lands here, guaranteed), HitEnd, CancelOpen, MoveOpen
-	DamageMultiplier: number, -- x weapon Damage (the staggered target's CritMultiplier applies on top)
+	DamageMultiplier: number, -- x weapon Damage (the weapon's CritMultiplier applies on top, the target is staggered)
+	DamageType: string?, -- "Slash" | "Strike" | "Pierce" (defaults to the weapon's DamageType)
 	Range: number, -- studs from your root to the target's root to start a finisher
 	Weight: string?, -- "Light" | "Heavy" hit feel
 	Sound: string?, -- Sound name played at the start
@@ -43,6 +52,9 @@ export type WeaponDefinition = {
 	Model: string, -- model name in Combat.Assets.WeaponModels
 	Damage: number,
 	Reach: number, -- studs from the wielder's root part the weapon can hit
+	DamageType: string?, -- default damage type of its attacks (class default)
+	CritMultiplier: number?, -- x damage on staggered targets and ripostes (class default; CombatConfig.CritMultiplier)
+	GuardDamage: number?, -- x stamina its blocked hits cost the blocker (class default 1)
 	Combo: { AttackDefinition }, -- light attacks, chained by tapping attack
 	Heavy: HeavyDefinition, -- hold attack to charge, release to swing
 	Riposte: RiposteDefinition?, -- finisher on a posture/guard-broken enemy (defaults from Combat.ClassDefaults)
@@ -67,3 +79,4 @@ export type ClassDefinition = {
 }
 
 return {}
+

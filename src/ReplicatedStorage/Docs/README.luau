@@ -46,6 +46,12 @@ QUICK HOW-TOS
   Read a player's level:      player:GetAttribute("ClassLevel") / ("Level_Sword") anywhere
 
 CHANGELOG  (newest first; one line per change, with your name)
+  2026-10-08  Henry  Combat Phase 0 (shared rules for new weapon classes): new Combat.CombatRules (pure math,
+                     unit tested by ServerStorage.CombatDev.Tests). Damage types Slash/Strike/Pierce, counter
+                     hits (target mid-attack: 1.1x, Pierce 1.3x), armor windows (Armor / HyperArmor: no flinch,
+                     0.9x damage taken), per-class CritMultiplier and GuardDamage, longest stun wins, stagger
+                     immunity (1 s PvE, 3 s PvP), CombatConfig.PvP table, stricter marker checks. The client now
+                     obeys the server's Flinch. See Docs.Combat > DAMAGE TYPES, ARMOR, STUN RULES. (via Claude)
   2026-10-05  Henry  New StarterGui.Main Menu Gui.InventoryWeaponDisplay: while the inventory is open the equipped
                      weapon is drawn into the live character's hand (a different weapon you equip is drawn too);
                      closing puts it back as it was. InventoryController calls Enter()/Exit(). See Docs.Inventory >
@@ -114,3 +120,4 @@ CHANGELOG  (newest first; one line per change, with your name)
 ]]
 
 return {}
+

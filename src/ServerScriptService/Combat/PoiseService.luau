@@ -11,10 +11,20 @@
 	Replication: model attributes Poise, MaxPoise, CombatState = "Staggered" while staggered.
 	NPCs (not players) also get a small poise bar billboard with a STAGGERED label.
 
+	Stun rules (2026-10-08, CombatRules):
+		Longest stun wins: a new stagger never shortens a running one (CombatRules.StaggerUpdate).
+		"Riposted" always takes over the kind so the finisher holds its target.
+		Stagger immunity: for CombatRules.StaggerImmunity(pvp) seconds after a full stagger
+		(Stagger, GuardBreak, Riposted) ends, poise damage and parry drains can't break poise again.
+		Poise stops at 1 and the hit is a flinch instead. A ParryRecoil gives no immunity.
+
 	API:
-		:ApplyPoiseDamage(model, amount) -> "Stagger" | "Flinch" | "None"
-		:Stagger(model, duration, kind?)          kind = "Stagger" (default) | "GuardBreak"
+		:ApplyPoiseDamage(model, amount, pvp?) -> "Stagger" | "Flinch" | "None"
+		:DrainPoise(model, amount, pvp?) -> brokePoise
+		:Stagger(model, duration, kind?, keepPoise?, pvp?) -> applied   kind = "Stagger" (default) |
+		                                          "GuardBreak" | "ParryRecoil" | "Riposted"
 		:IsStaggered(model) -> boolean
+		:IsStaggerImmune(model) -> boolean
 		.Staggered     Signal(model, kind, duration)
 		.StaggerEnded  Signal(model)
 		.Flinched      Signal(model)
@@ -28,10 +38,13 @@ local RunService = game:GetService("RunService")
 
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local CombatConfig = require(ReplicatedStorage.Combat.CombatConfig)
+local CombatRules = require(ReplicatedStorage.Combat.CombatRules)
 
 local Attr = CombatConfig.Attributes
 local DEFAULT_NPC_POISE = 30
 local REGEN_RATE = 25 -- poise per second once regen starts
+-- staggers that start stagger immunity when they end (a parry recoil is too short to count)
+local IMMUNITY_KINDS = { Stagger = true, GuardBreak = true, Riposted = true }
 
 local PoiseService = {
 	Staggered = Signal.new(),
@@ -45,6 +58,9 @@ type Entry = {
 	lastHit: number,
 	staggerUntil: number,
 	staggerToken: number,
+	staggerKind: string?,
+	staggerPvP: boolean,
+	immuneUntil: number,
 	bar: Frame?,
 	label: TextLabel?,
 }
@@ -114,7 +130,16 @@ local function getEntry(model: Model): Entry
 	if typeof(max) ~= "number" then
 		max = if isPlayer then CombatConfig.PlayerMaxPoise else DEFAULT_NPC_POISE
 	end
-	entry = { max = max, poise = max, lastHit = 0, staggerUntil = 0, staggerToken = 0 }
+	entry = {
+		max = max,
+		poise = max,
+		lastHit = 0,
+		staggerUntil = 0,
+		staggerToken = 0,
+		staggerKind = nil,
+		staggerPvP = false,
+		immuneUntil = 0,
+	}
 	entries[model] = entry
 	model:SetAttribute(Attr.MaxPoise, max)
 	if not isPlayer then
@@ -132,23 +157,50 @@ function PoiseService:IsStaggered(model: Model): boolean
 	return entry ~= nil and os.clock() < entry.staggerUntil
 end
 
+function PoiseService:IsStaggerImmune(model: Model): boolean
+	local entry = entries[model]
+	return entry ~= nil and os.clock() < entry.immuneUntil
+end
+
 -- keepPoise: a short recoil (e.g. being parried) that does not refill poise.
-function PoiseService:Stagger(model: Model, duration: number, kind: string?, keepPoise: boolean?)
+-- pvp: the stagger came from a player hitting a player (picks the PvP immunity time).
+-- Returns false when a longer stun was already running and nothing changed.
+function PoiseService:Stagger(model: Model, duration: number, kind: string?, keepPoise: boolean?, pvp: boolean?): boolean
 	local entry = getEntry(model)
+	local now = os.clock()
+	local requestedKind = kind or "Stagger"
+	local currentKind = nil
+	if now < entry.staggerUntil then
+		currentKind = entry.staggerKind
+	end
+	local newEnd, newKind = CombatRules.StaggerUpdate(entry.staggerUntil, currentKind, now, duration, requestedKind)
+	if currentKind ~= nil and newEnd == entry.staggerUntil and newKind == currentKind then
+		return false -- longest stun wins: the running one already lasts longer
+	end
+
 	entry.staggerToken += 1
 	local myToken = entry.staggerToken
-	entry.staggerUntil = os.clock() + duration
+	entry.staggerUntil = newEnd
+	entry.staggerKind = newKind
+	entry.staggerPvP = pvp == true
+	if IMMUNITY_KINDS[newKind] then
+		-- counted from the stagger's end, set now so there is no gap between the stun ending and
+		-- the delayed callback below running; never shortened by a later stagger (e.g. a riposte)
+		entry.immuneUntil = math.max(entry.immuneUntil, newEnd + CombatRules.StaggerImmunity(entry.staggerPvP))
+	end
 	if not keepPoise then
 		entry.poise = entry.max
 	end
+	local remaining = newEnd - now
 	model:SetAttribute(Attr.CombatState, "Staggered")
-	model:SetAttribute(Attr.StaggerKind, kind or "Stagger")
+	model:SetAttribute(Attr.StaggerKind, newKind)
 	refresh(model, entry)
-	self.Staggered:Fire(model, kind or "Stagger", duration)
+	self.Staggered:Fire(model, newKind, remaining)
 
-	task.delay(duration, function()
+	task.delay(remaining, function()
 		if entries[model] == entry and entry.staggerToken == myToken then
 			entry.staggerUntil = 0
+			entry.staggerKind = nil
 			model:SetAttribute(Attr.StaggerKind, nil)
 			if model:GetAttribute(Attr.CombatState) == "Staggered" then
 				model:SetAttribute(Attr.CombatState, "Idle")
@@ -157,34 +209,46 @@ function PoiseService:Stagger(model: Model, duration: number, kind: string?, kee
 			self.StaggerEnded:Fire(model)
 		end
 	end)
+	return true
 end
 
 -- Removes poise without a flinch (parries use this on the attacker). Returns true if it broke
--- poise, in which case the model is now staggered for the full StaggerTime.
-function PoiseService:DrainPoise(model: Model, amount: number): boolean
+-- poise, in which case the model is now staggered for the full StaggerTime. During stagger
+-- immunity poise stops at 1 and this returns false.
+function PoiseService:DrainPoise(model: Model, amount: number, pvp: boolean?): boolean
 	local entry = getEntry(model)
-	if os.clock() < entry.staggerUntil or amount <= 0 then
+	local now = os.clock()
+	if now < entry.staggerUntil or amount <= 0 then
 		return false
 	end
-	entry.lastHit = os.clock()
+	entry.lastHit = now
 	entry.poise -= amount
 	if entry.poise <= 0 then
-		self:Stagger(model, CombatConfig.StaggerTime, "Stagger")
+		if now < entry.immuneUntil then
+			entry.poise = 1
+			refresh(model, entry)
+			return false
+		end
+		self:Stagger(model, CombatConfig.StaggerTime, "Stagger", false, pvp)
 		return true
 	end
 	refresh(model, entry)
 	return false
 end
 
-function PoiseService:ApplyPoiseDamage(model: Model, amount: number): string
+function PoiseService:ApplyPoiseDamage(model: Model, amount: number, pvp: boolean?): string
 	local entry = getEntry(model)
-	if os.clock() < entry.staggerUntil then
+	local now = os.clock()
+	if now < entry.staggerUntil then
 		return "None"
 	end
-	entry.lastHit = os.clock()
+	entry.lastHit = now
 	entry.poise -= amount
+	if entry.poise <= 0 and now < entry.immuneUntil then
+		entry.poise = 1 -- stagger immunity: the hit can only flinch
+	end
 	if entry.poise <= 0 then
-		self:Stagger(model, CombatConfig.StaggerTime, "Stagger")
+		self:Stagger(model, CombatConfig.StaggerTime, "Stagger", false, pvp)
 		return "Stagger"
 	end
 	refresh(model, entry)
@@ -210,3 +274,4 @@ RunService.Heartbeat:Connect(function(dt)
 end)
 
 return PoiseService
+

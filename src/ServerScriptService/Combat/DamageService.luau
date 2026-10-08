@@ -10,7 +10,11 @@
 			PoiseDamage: number?,
 			Position: Vector3?,         -- where to show the spark
 			Class: string?, WeaponId: string?,
+			DamageType: string?,        -- "Slash" (default) | "Strike" | "Pierce" (CombatConfig.DamageTypes)
+			CritMultiplier: number?,    -- the attacker's weapon class value (CombatConfig.CritMultiplier if nil)
+			GuardDamage: number?,       -- x stamina a blocker loses (1 if nil)
 		}
+		The math lives in Combat.CombatRules (shared with the unit tests).
 		Resolution order:
 			1. target has IFrames (rolling)          -> "Dodged", nothing happens
 			2. target blocking and facing attacker:
@@ -22,14 +26,22 @@
 		   GuardCounterUntil = now + GuardCounterWindow (read by CombatService and WeaponController).
 			   otherwise                            -> "Blocked": BlockDamageMultiplier chip damage,
 			                                           stamina loss; 0 stamina -> "GuardBreak"
+			   blocked stamina cost = CombatRules.GuardStaminaCost (damage type and GuardDamage scale it)
 			3. otherwise                             -> "Hit" (or "Crit" on a staggered target):
 			                                           damage (player attackers scale with class level),
+			                                           x CritMultiplier on a staggered target,
+			                                           x counter bonus if the target was Attacking/Charging
+			                                           (info.Counter = true), x the target's armor DamageTaken
+			                                           while its attack's armor window is up,
 			                                           poise damage -> flinch or stagger
+		PvP (a player hitting a player) uses the CombatConfig.PvP multipliers.
 		Killing blow on a Model with XPReward (by a player) -> ProgressionService:AddXP.
 
 	:ApplyDamage(attacker: Player, humanoid, baseDamage, info?) -> damageDealt
 		Kept for existing callers; same as ResolveHit with info = { Class, WeaponId, PoiseDamage }.
 	:CanDamage(attacker, humanoid) -> boolean     (PvP rule, alive check, not yourself)
+	:SetArmorProvider(fn)   fn(model) -> the attack whose armor window is up right now, or nil.
+	                        CombatService registers it at Start (avoids a circular require).
 	.Damaged  Signal(attacker, humanoid, amount, info)
 	.Killed   Signal(attacker, model, info)
 	.Resolved Signal(attacker, humanoid, result, amount)
@@ -43,6 +55,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local CombatConfig = require(ReplicatedStorage.Combat.CombatConfig)
+local CombatRules = require(ReplicatedStorage.Combat.CombatRules)
 local WeaponRegistry = require(ReplicatedStorage.Combat.WeaponRegistry)
 local ProgressionService = require(script.Parent.ProgressionService)
 local PoiseService = require(script.Parent.PoiseService)
@@ -56,6 +69,12 @@ local DamageService = {
 	Killed = Signal.new(),
 	Resolved = Signal.new(),
 }
+
+local armorProvider: ((Model) -> any?)? = nil
+
+function DamageService:SetArmorProvider(provider: (Model) -> any?)
+	armorProvider = provider
+end
 
 local function attackerModelOf(attacker: Instance): Model?
 	if attacker:IsA("Player") then
@@ -118,7 +137,9 @@ function DamageService:ResolveHit(hit): (string, number)
 	local attackerModel = attackerModelOf(attacker)
 	local targetPlayer = Players:GetPlayerFromCharacter(target)
 	local position = hit.Position or (rootOf(target) and (rootOf(target) :: BasePart).Position) or target:GetPivot().Position
-	local info = { Class = hit.Class, WeaponId = hit.WeaponId }
+	local pvp = attackerPlayer ~= nil and targetPlayer ~= nil
+	local damageType = hit.DamageType or "Slash"
+	local info = { Class = hit.Class, WeaponId = hit.WeaponId, DamageType = damageType, Counter = false }
 
 	if target:GetAttribute(Attr.IFrames) == true then
 		self.Resolved:Fire(attacker, humanoid, "Dodged", 0)
@@ -138,9 +159,9 @@ function DamageService:ResolveHit(hit): (string, number)
 				-- Sekiro-style: a parry drains the attacker's poise; only an empty bar is a full stagger,
 				-- otherwise it is a short recoil (room for one counter slash).
 				local drain = (hit.PoiseDamage or 0) * CombatConfig.ParryPoiseMultiplier
-				local broke = PoiseService:DrainPoise(attackerModel, drain)
+				local broke = PoiseService:DrainPoise(attackerModel, drain, pvp)
 				if not broke then
-					PoiseService:Stagger(attackerModel, CombatConfig.ParryRecoilTime, "ParryRecoil", true)
+					PoiseService:Stagger(attackerModel, CombatConfig.ParryRecoilTime, "ParryRecoil", true, pvp)
 				end
 			end
 			target:SetAttribute(Attr.GuardCounterUntil, workspace:GetServerTimeNow() + CombatConfig.GuardCounterWindow)
@@ -161,12 +182,14 @@ function DamageService:ResolveHit(hit): (string, number)
 		local chip = math.floor(hit.Damage * CombatConfig.BlockDamageMultiplier * 10 + 0.5) / 10
 		humanoid:TakeDamage(chip)
 		local result = "Blocked"
-		local staminaLeft = if targetPlayer
-			then StaminaService:Spend(targetPlayer, hit.Damage * CombatConfig.BlockStaminaPerDamage * (1 - stability))
-			else 1
+		local staminaLeft = 1
+		if targetPlayer then
+			local cost = CombatRules.GuardStaminaCost(hit.Damage, damageType, hit.GuardDamage, stability)
+			staminaLeft = StaminaService:Spend(targetPlayer, cost)
+		end
 		if staminaLeft <= 0 then
 			result = "GuardBreak"
-			PoiseService:Stagger(target, CombatConfig.GuardBreakTime, "GuardBreak")
+			PoiseService:Stagger(target, CombatConfig.GuardBreakTime, "GuardBreak", false, pvp)
 		else
 			target:SetAttribute(Attr.GuardCounterUntil, workspace:GetServerTimeNow() + CombatConfig.GuardCounterWindow)
 			if targetPlayer then
@@ -179,23 +202,46 @@ function DamageService:ResolveHit(hit): (string, number)
 		return result, chip
 	end
 
-	local amount = hit.Damage
+	local levelMultiplier = 1
 	if attackerPlayer then
-		amount *= ProgressionService:GetDamageMultiplier(attackerPlayer, hit.Class)
+		levelMultiplier = ProgressionService:GetDamageMultiplier(attackerPlayer, hit.Class)
 	end
 	local result = "Hit"
-	if PoiseService:IsStaggered(target) then
-		amount *= CombatConfig.CritMultiplier
+	local staggered = PoiseService:IsStaggered(target)
+	if staggered then
 		result = "Crit"
 	end
-	amount = math.floor(amount * 10 + 0.5) / 10
+	-- counter hit: the target was mid-attack (a staggered target is never Attacking)
+	local isCounter = CombatRules.IsCounterState(target:GetAttribute(Attr.CombatState))
+	info.Counter = isCounter
+	-- armor: the target's current attack has its armor window up
+	local armorTaken = 1
+	if armorProvider then
+		local armoredAttack = armorProvider(target)
+		if armoredAttack then
+			armorTaken = CombatRules.ArmorDamageTaken(armoredAttack, pvp)
+		end
+	end
+	local amount = CombatRules.HitDamage({
+		Base = hit.Damage,
+		LevelMultiplier = levelMultiplier,
+		Staggered = staggered,
+		CritMultiplier = hit.CritMultiplier,
+		Counter = CombatRules.CounterMultiplier(damageType, isCounter, pvp),
+		ArmorTaken = armorTaken,
+		PvP = pvp,
+	})
 
 	humanoid:TakeDamage(amount)
 	self.Damaged:Fire(attacker, humanoid, amount, info)
 	fireEffect("Hit", position, attackerPlayer)
 
 	if humanoid.Health > 0 and (hit.PoiseDamage or 0) > 0 then
-		PoiseService:ApplyPoiseDamage(target, hit.PoiseDamage)
+		local poiseDamage = hit.PoiseDamage
+		if pvp then
+			poiseDamage *= CombatConfig.PvP.PoiseMultiplier
+		end
+		PoiseService:ApplyPoiseDamage(target, poiseDamage, pvp)
 	end
 
 	if humanoid.Health <= 0 then
@@ -223,3 +269,4 @@ function DamageService:ApplyDamage(attacker: Player, humanoid: Humanoid, baseDam
 end
 
 return DamageService
+

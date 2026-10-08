@@ -36,7 +36,10 @@
 		  input). Unlocked rolls turn to the input and roll forward, Elden Ring style.
 		- attacks turn you toward the lock-on target / stick direction during the wind-up and
 		  commit to that direction at HitStart; movement is slowed while acting
-		- a hit from an enemy flinches you out of an attack unless it has HyperArmor
+		- a hit from an enemy flinches you out of an attack unless the attack's armor window is up
+		  (CombatRules.ArmorActive: Armor / HyperArmor, ArmorStart..ArmorEnd markers). The server
+		  decides: it only sends Flinch when its own armor check failed, and the client obeys it,
+		  because the client's clock runs about one ping ahead of the server's for the same action
 
 	Weapon lifecycle: the server puts "WeaponModel" in the character and sets EquippedWeapon;
 	this creates WeaponBehaviors.<Class>.new(definition, character, model, animationSet) and
@@ -811,10 +814,7 @@ local function onReact(kind: string, extra: any?)
 	elseif kind == "Stagger" or kind == "GuardBreak" then
 		enterStagger(kind, duration)
 	elseif kind == "Flinch" then
-		local attack = action and action.attack
-		if attack and attack.HyperArmor then
-			return
-		end
+		-- the server already checked armor (CombatService:GetArmor), so obey it
 		local wasBlocking = WeaponController.State == "Blocking"
 		cancelAll()
 		if wasBlocking then
@@ -1037,3 +1037,4 @@ function WeaponController:Start(inputController, movementController, cameraContr
 end
 
 return WeaponController
+

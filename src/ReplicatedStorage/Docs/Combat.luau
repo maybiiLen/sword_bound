@@ -75,7 +75,8 @@ STATE MACHINE  (WeaponController on the client, mirrored by CombatService on the
     older one, so a panic roll is never eaten by a queued attack.
   - Light combo: Light1 -> Light2 -> Light3 (heavier finisher), resets after ComboResetTime.
   - Flinch: a hit that doesn't break poise interrupts the current action for FlinchTime,
-    unless the attack has HyperArmor (heavy attacks do).
+    unless the attack's armor window is up (HyperArmor / Armor, see "Damage types, armor, stun
+    rules"; heavy, jump attack and guard counter have it). The server decides and the client obeys.
   - MoveSpeedMultiplier per state (CombatConfig.MoveSpeedMultipliers) slows you while
     attacking/charging/blocking; SprintServer multiplies WalkSpeed by it.
   - Momentum (2026-09-30): attacks no longer stop you dead. The client carries your current
@@ -107,9 +108,12 @@ DEFENSE  (DamageService:ResolveHit, in this order)
                   Keep deflecting and the attacker's posture breaks. Raised <= PerfectParryWindow
                   (0.08 s) ago = "PerfectParry": bigger effects + impact frame.
   3. Block        facing the attacker -> BlockDamageMultiplier chip damage and stamina loss of
-                  Damage * BlockStaminaPerDamage * (1 - weapon BlockStability). 0 stamina ->
+                  Damage * BlockStaminaPerDamage * (1 - weapon BlockStability) x damage type
+                  GuardStamina x attacker GuardDamage (CombatRules.GuardStaminaCost). 0 stamina ->
                   guard break (staggered GuardBreakTime).
-  4. Hit          damage (x CritMultiplier if the target is staggered), then poise damage.
+  4. Hit          damage x level x CritMultiplier (attacker's weapon, if the target is staggered)
+                  x counter bonus (target Attacking/Charging) x armor DamageTaken (target's armor
+                  window up), then poise damage. Math: CombatRules.HitDamage.
 
 RIPOSTE  (finisher; 2026-10-01)
   When an enemy's posture breaks ("Stagger") or its guard breaks ("GuardBreak"), it gets a red
@@ -123,7 +127,8 @@ RIPOSTE  (finisher; 2026-10-01)
     + PoiseService:IsStaggered + within Range + ReachTolerance + can act. Holds the target with a
     "Riposted" stagger for the whole animation (poise untouched), gives the attacker IFrames until
     MoveOpen, and deals Damage x DamageMultiplier at the HitStart marker through
-    DamageService:ResolveHit (CritMultiplier applies because the target is staggered). Client
+    DamageService:ResolveHit (the weapon's CritMultiplier applies because the target is
+    staggered; sword ripostes are Pierce). Client
     hitbox reports during a riposte are ignored.
   - Client (WeaponController): findRiposteTarget (lock-on target first, else nearest open enemy in
     front within Range), squares up and closes to ~2.6 studs, plays the animation, impact frame +
@@ -172,12 +177,52 @@ TESTING  (Studio only)
   script can press inputs with exact timing: :Fire("Attack" | "Block" | "Roll", pressed).
   Studio's simulated mouse/keyboard input is too slow (100 ms to 1 s between steps) for windows
   like RollAttackWindow or the parry window.
+  Unit tests (2026-10-08): ServerStorage.CombatDev.Tests covers CombatRules, every Specs hit
+  window and the WeaponRegistry merge. In a playtest, Server command bar:
+    print(require(game.ServerStorage.CombatDev.Tests).Run())
+  Run it after changing CombatRules, CombatConfig damage numbers, Specs markers or ClassDefaults.
+  Note: the MCP/command-bar Server VM gets its own copies of server modules, so calling
+  DamageService there does not touch the game's PoiseService/CombatService state.
 
 POISE  (PoiseService)
   Every Humanoid model has poise (players: PlayerMaxPoise; NPCs: their MaxPoise attribute,
   default 30). Attacks deal PoiseDamage; at 0 the target is staggered (StaggerTime) and takes
   crits. Poise refills after PoiseRegenDelay without taking poise damage. NPCs show a small
-  poise bar + "STAGGERED" label.
+  poise bar + "STAGGERED" label. Armor stops flinches, not poise breaks: a big enough hit still
+  staggers an armored attacker.
+
+DAMAGE TYPES, ARMOR, STUN RULES  (2026-10-08, Combat.CombatRules + CombatConfig)
+  All the math lives in ReplicatedStorage.Combat.CombatRules (pure functions, unit tested).
+  - Damage types: an attack's DamageType, else the weapon's, else "Slash".
+      Type     counter bonus   guard stamina   used by
+      Slash    1.1x            1.0x            sword swings (class default)
+      Strike   1.1x            1.4x            future maces / axe heavies
+      Pierce   1.3x            0.9x            sword RollAttack and Riposte (thrusts)
+    CombatConfig.DamageTypes. Strike +40% guard damage follows Elden Ring's Hammer Talisman; Pierce
+    1.3 counters follow ER's +30% vs enemies; the 1.1 base and Pierce 0.9 are judgment calls.
+  - Counter hit: the target's CombatState is Attacking or Charging when the hit lands (whole
+    action, recovery included). Works on players and the Sparring Knight (it sets CombatState
+    Attacking during swings). The ResolveHit info table carries Counter = true.
+  - Armor: attack field Armor = { Start?, End?, DamageTaken? } (seconds from the attack's start).
+    Start/End default to the animation's ArmorStart/ArmorEnd markers, else the whole action.
+    HyperArmor = true is the same as Armor = {}. While the window is up the attack ignores
+    flinches and its owner takes x DamageTaken (default CombatConfig.ArmorDamageTaken 0.9).
+    Counter and armor both apply: a Slash hit on a player mid-heavy = 1.1 x 0.9 = 0.99x.
+    Server: CombatService:GetArmor(player) (DamageService gets it through SetArmorProvider).
+  - Weapon class stats (ClassDefaults): CritMultiplier (Sword 1.5) on staggered targets and
+    ripostes, GuardDamage (Sword 1.0) x the stamina a blocker loses. CombatConfig.CritMultiplier is
+    only the fallback.
+  - Longest stun wins: a new stagger never shortens a running one; a shorter one is ignored.
+    "Riposted" always takes over the kind (to hold the target) but never shortens either.
+  - Stagger immunity: after a full stagger (Stagger, GuardBreak, Riposted) ends, poise can't break
+    again for StaggerImmunityTime (PvE 1.0 s, PvP 3.0 s). Poise stops at 1 and the hit flinches
+    instead; parry drains give a ParryRecoil instead. Parry recoils give no immunity. Guard breaks
+    from stamina are NOT blocked by immunity (open question).
+  - PvP (a player hitting a player): CombatConfig.PvP multiplies damage, poise damage, halves the
+    counter bonus (CounterBonusScale 0.5), sets armor DamageTaken and the immunity time. PvP is off
+    today; these are the balancing hooks.
+  - WeaponRegistry now rejects a weapon whose attack animations (combo, heavy, riposte,
+    contextual) lack HitStart < HitEnd <= CancelOpen.
 
 ANIMATIONS  (Animations/Specs -> AnimationBuilder -> Assets/AnimSaves)
   Each animation is a list of poses (hand/foot targets + torso angles) solved with IK into a
@@ -230,11 +275,14 @@ ATTACK DEFINITION FIELDS  (Combo = { attack1, ... }, Heavy = attack)
   StaminaCost, PoiseDamage
   Weight            "Light" | "Heavy" (hit-stop + camera shake strength)
   Lunge             forward push multiplier at the Lunge marker
-  HyperArmor        true = not interrupted by flinches
+  HyperArmor        true = armor for the whole action (same as Armor = {})
+  Armor             { Start?, End?, DamageTaken? } armor window (see "Damage types, armor, stun rules")
+  DamageType        "Slash" | "Strike" | "Pierce" (defaults to the weapon's)
   Sound             name in Assets/Sounds
   Heavy only: ChargeAnimation, FullChargeDamageBonus, FullChargePoiseBonus
   Weapon-level: Damage, Reach (studs, validated), ComboResetTime, BlockStability (0-1),
-  IdleAnimation, BlockAnimation, Skills.
+  IdleAnimation, BlockAnimation, Skills, and class stats DamageType, CritMultiplier, GuardDamage
+  (from ClassDefaults unless the weapon sets them).
 
 ADDING A WEAPON TYPE  (Bow, Spear...)
   1. Classes/Definitions/<Type>  (see Docs.Progression) - its own level track.
@@ -253,7 +301,8 @@ SERVER VALIDATION  (CombatService)
 
 DAMAGE  (DamageService)
   :ResolveHit({ Attacker = player or NPC model, Target = humanoid, Damage, PoiseDamage,
-                Position?, Class?, WeaponId? }) -> (result, damage)
+                Position?, Class?, WeaponId?, DamageType?, CritMultiplier?, GuardDamage? })
+                -> (result, damage)
   Player damage scales with class level. Killing blow on a Model with XPReward -> XP.
   Signals: Damaged, Killed, Resolved(attacker, humanoid, result, amount).
   Skills, traps and mobs should call ResolveHit so dodges/blocks/parries apply to them too.
@@ -263,6 +312,7 @@ SPARRING KNIGHT  (SparringKnightService + client KnightAnimator)
   throws a quick wide slash or a slow delayed overhead chop (both hyper armor) - practise
   rolling through, blocking and parrying. Attributes: XPReward, MaxPoise, AggroRange,
   RespawnTime. The server sets KnightAction = "<Animation>|<serial>", clients animate it.
+  CombatState is "Attacking" during a swing, so hitting it mid-swing is a counter hit.
 
 ATTRIBUTES
   Character: EquippedWeapon, WeaponDrawn, CombatState, SprintBlocked, MoveSpeedMultiplier,
@@ -298,3 +348,4 @@ NOT BUILT YET (designed for)
 ]]
 
 return {}
+

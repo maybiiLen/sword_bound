@@ -15,6 +15,8 @@
 	Animations.Specs markers.
 
 	Hits go through DamageService:ResolveHit, so dodges (IFrames), blocks and parries all work.
+	The model's CombatState attribute is "Attacking" during a swing (so player hits on it count as
+	counter hits) and "Idle" after; PoiseService sets "Staggered".
 	See Docs.Combat > "Sparring knight".
 ]]
 
@@ -114,6 +116,7 @@ local function attack(knight: Knight, target: Model)
 	knight.token += 1
 	local myToken = knight.token
 	knight.state = "Attacking"
+	knight.model:SetAttribute(CombatConfig.Attributes.CombatState, "Attacking")
 	knight.humanoid:Move(Vector3.zero)
 	knight.humanoid.WalkSpeed = 0
 	playAction(knight, chosen.Animation)
@@ -159,6 +162,7 @@ local function attack(knight: Knight, target: Model)
 			connection:Disconnect()
 			if knight.token == myToken and knight.state == "Attacking" then
 				knight.state = "Idle"
+				knight.model:SetAttribute(CombatConfig.Attributes.CombatState, "Idle")
 				knight.humanoid.WalkSpeed = WALK_SPEED
 				knight.nextAttackAt = os.clock() + COOLDOWN.Min + math.random() * (COOLDOWN.Max - COOLDOWN.Min)
 			end
@@ -250,6 +254,7 @@ local function register(model: Instance)
 	humanoid.Died:Once(function()
 		knight.token += 1
 		knight.state = "Dead"
+		model:SetAttribute(CombatConfig.Attributes.CombatState, "Idle") -- a swing cut short by death
 		align.Enabled = false
 	end)
 	model.Destroying:Once(function()
@@ -300,3 +305,4 @@ function SparringKnightService:Start()
 end
 
 return SparringKnightService
+

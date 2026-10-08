@@ -12,14 +12,23 @@
 	follow Elden Ring's stance damage order (running < jump < guard counter) but are toned down,
 	since players call ER's jump attack overtuned. The exact values are judgment calls (unsourced).
 
-	Used by: WeaponRegistry. See Docs.Combat > "Riposte" / "Contextual attacks" / "Adding a weapon type".
+	Class stats (2026-10-08, Phase 0): DamageType is the class's default damage type (an attack can
+	override it), CritMultiplier is the bonus vs a staggered target, GuardDamage scales the stamina a
+	blocker loses. Sword is the baseline (1.5 / 1.0); other classes are tuned against it.
+
+	Used by: WeaponRegistry. See Docs.Combat > "Riposte" / "Contextual attacks" / "Adding a weapon type"
+	/ "Damage types, armor, stun rules".
 ]]
 
 return {
 	Sword = {
+		DamageType = "Slash",
+		CritMultiplier = 1.5,
+		GuardDamage = 1.0,
 		Riposte = {
 			Animation = "Riposte",
-			DamageMultiplier = 2.5, -- x weapon Damage; the staggered target's CritMultiplier applies on top
+			DamageType = "Pierce",
+			DamageMultiplier = 2.5, -- x weapon Damage; the weapon's CritMultiplier applies on top (target is staggered)
 			Range = 5.5,
 			Weight = "Heavy",
 			Sound = "Lunge",
@@ -50,6 +59,7 @@ return {
 			StaminaCost = 12,
 			PoiseDamage = 14,
 			Weight = "Light",
+			DamageType = "Pierce",
 			Lunge = 1.6,
 			Sound = "Swing",
 		},
@@ -65,3 +75,4 @@ return {
 		},
 	},
 }
+

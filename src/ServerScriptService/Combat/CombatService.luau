@@ -46,12 +46,17 @@
 	client keeps playing the settle as a cosmetic tail.
 
 	Reactions to the player (ReactRemote): Stagger / GuardBreak (from PoiseService) and Flinch
-	(ignored while the current attack has HyperArmor). DamageService sends BlockImpact and
-	ParrySuccess itself.
+	(ignored while the current attack's armor window is up, CombatRules.ArmorActive). DamageService
+	sends BlockImpact and ParrySuccess itself.
+
+	Hits pass the attack's DamageType (CombatRules.DamageTypeOf) and the weapon's CritMultiplier and
+	GuardDamage to DamageService. At Start this registers the armor provider DamageService uses for
+	armor damage reduction.
 
 	API:
 		:GetState(player) -> string
-		:HasHyperArmor(player) -> boolean
+		:GetArmor(player) -> attack?      the current attack if its armor window is up right now
+		:HasHyperArmor(player) -> boolean  same as GetArmor(player) ~= nil (kept for old callers)
 		.AttackStarted  Signal(player, kind, attack, definition)
 		.HitConfirmed   Signal(player, targetModel, result, damage)
 		.HitRejected    Signal(player, reason)      handy when tuning validation
@@ -66,6 +71,7 @@ local RunService = game:GetService("RunService")
 local Combat = ReplicatedStorage.Combat
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local CombatConfig = require(Combat.CombatConfig)
+local CombatRules = require(Combat.CombatRules)
 local AnimationLibrary = require(Combat.Animations.AnimationLibrary)
 local WeaponService = require(script.Parent.WeaponService)
 local DamageService = require(script.Parent.DamageService)
@@ -420,7 +426,8 @@ local function onAttack(player: Player, kind: unknown, arg: unknown)
 			return
 		end
 		-- hold the victim for the whole finisher (keeps poise as-is; the crit multiplier applies)
-		PoiseService:Stagger(target, AnimationLibrary.Length(riposte.Animation) + 0.2, "Riposted", true)
+		local pvp = Players:GetPlayerFromCharacter(target) ~= nil
+		PoiseService:Stagger(target, AnimationLibrary.Length(riposte.Animation) + 0.2, "Riposted", true, pvp)
 		startAttack(player, actor, "Riposte", riposte, definition, now, nil, nil)
 		local action = actor.action :: Action
 		local character = actor.character
@@ -438,6 +445,9 @@ local function onAttack(player: Player, kind: unknown, arg: unknown)
 				Position = if hitRoot then (hitRoot :: BasePart).Position else nil,
 				Class = definition.Class,
 				WeaponId = definition.Id,
+				DamageType = CombatRules.DamageTypeOf(riposte, definition),
+				CritMultiplier = definition.CritMultiplier,
+				GuardDamage = definition.GuardDamage,
 			})
 		end)
 		task.delay(action.length, function()
@@ -582,6 +592,9 @@ local function onHit(player: Player, target: unknown, position: unknown)
 		Position = effectPosition,
 		Class = definition.Class,
 		WeaponId = definition.Id,
+		DamageType = CombatRules.DamageTypeOf(attack, definition),
+		CritMultiplier = definition.CritMultiplier,
+		GuardDamage = definition.GuardDamage,
 	})
 	CombatService.HitConfirmed:Fire(player, target, result, dealt)
 end
@@ -591,16 +604,37 @@ function CombatService:GetState(player: Player): string
 	return if actor and actor.character == player.Character then actor.state else "Idle"
 end
 
-function CombatService:HasHyperArmor(player: Player): boolean
+function CombatService:GetArmor(player: Player): any?
 	local actor = actors[player]
-	local action = actor and actor.action
-	return action ~= nil and action.attack ~= nil and action.attack.HyperArmor == true
+	if not actor or actor.character ~= player.Character then
+		return nil
+	end
+	local action = actor.action
+	if not action or not action.attack then
+		return nil
+	end
+	if CombatRules.ArmorActive(action.attack, os.clock() - action.start) then
+		return action.attack
+	end
+	return nil
+end
+
+function CombatService:HasHyperArmor(player: Player): boolean
+	return self:GetArmor(player) ~= nil
 end
 
 function CombatService:Start()
 	Remotes.AttackRemote.OnServerEvent:Connect(onAttack)
 	Remotes.ActionRemote.OnServerEvent:Connect(onAction)
 	Remotes.HitRemote.OnServerEvent:Connect(onHit)
+
+	DamageService:SetArmorProvider(function(model: Model): any?
+		local player = Players:GetPlayerFromCharacter(model)
+		if not player then
+			return nil
+		end
+		return CombatService:GetArmor(player)
+	end)
 
 	PoiseService.Staggered:Connect(function(model: Model, kind: string, duration: number)
 		local player = Players:GetPlayerFromCharacter(model)
@@ -672,3 +706,4 @@ function CombatService:Start()
 end
 
 return CombatService
+

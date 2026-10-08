@@ -1,7 +1,7 @@
 ---
 type: moc
 author: claude
-updated: 2026-10-06
+updated: 2026-10-08
 tags:
   - moc
 ---
@@ -12,6 +12,8 @@ Everything under `Claude/` is written by Claude, kept separate from Henry's own 
 
 ## Efforts (active work)
 - [[Weapons and sword skills plan]] (draft, 2026-10-08)
+- [[Phase 0 shared combat systems]] (done 2026-10-08)
+- [[Weapon models and effects plan]] (draft, 2026-10-08)
 - [[Core fighting plan]]
 - [[Floor 1 build list]]
 
@@ -25,6 +27,9 @@ Research
 - [[Sword Skill system design (2026-10-08)]]
 - [[Roblox combat animation pipeline (2026-10-08)]]
 - [[Weapon class progression and switching (2026-10-08)]]
+- [[Anime Roblox combat games research (2026-10-08)]]
+- [[Melee animation and slash VFX craft research (2026-10-08)]]
+- [[Weapon models and VFX pipeline research (2026-10-08)]]
 
 Systems and workflow
 - [[Repo sync and commits]]
@@ -36,7 +41,7 @@ Systems and workflow
 - [[2026-09-30]]: sword feel pass, momentum and deflect pass
 - [[2026-10-01]]: parry fix, riposte, Discord, contextual attacks, directional rolls
 - [[2026-10-06]]: fundamentals research, moved notes into this vault
-- [[2026-10-08]]: deep research and plan for weapons, sword skills and animations
+- [[2026-10-08]]: deep research and plan for weapons, sword skills and animations; Phase 0 combat rules shipped; weapon models and effects research
 
 ## How Claude uses this vault
 - Every change gets a section in that day's Calendar note (`Claude/Calendar/YYYY-MM-DD.md`): what changed, how it was verified, the commit hash.

@@ -57,24 +57,39 @@ for _, module in Combat.Weapons:GetChildren() do
 	local function checkAnimation(name: string?, label: string)
 		check(name and Specs[name], `{label} animation '{tostring(name)}' has no entry in Animations.Specs`)
 	end
+	-- every attack animation needs HitStart < HitEnd <= CancelOpen (the hit window, then the point
+	-- where the next action may cancel the recovery)
+	local function checkWindow(name: string?, label: string)
+		local markers = name and Specs[name] and Specs[name].Markers
+		if not markers then
+			check(false, `{label} animation needs HitStart/HitEnd/CancelOpen markers`)
+			return
+		end
+		local hasAll = markers.HitStart and markers.HitEnd and markers.CancelOpen
+		check(hasAll, `{label} animation needs HitStart/HitEnd/CancelOpen markers`)
+		if hasAll then
+			check(markers.HitStart < markers.HitEnd, `{label} HitStart must come before HitEnd`)
+			check(markers.HitEnd <= markers.CancelOpen, `{label} HitEnd must not come after CancelOpen`)
+		end
+	end
 	for index, attack in def.Combo do
 		checkAnimation(attack.Animation, `Combo[{index}]`)
-		local hasWindow = Specs[attack.Animation] and Specs[attack.Animation].Markers
-		check(hasWindow and hasWindow.HitStart and hasWindow.HitEnd, `Combo[{index}] animation needs HitStart/HitEnd markers`)
+		checkWindow(attack.Animation, `Combo[{index}]`)
 	end
 	if def.Heavy then
 		checkAnimation(def.Heavy.Animation, "Heavy")
 		checkAnimation(def.Heavy.ChargeAnimation, "Heavy charge")
+		checkWindow(def.Heavy.Animation, "Heavy")
 	end
 	if def.Riposte then
 		checkAnimation(def.Riposte.Animation, "Riposte")
+		checkWindow(def.Riposte.Animation, "Riposte")
 	end
 	for _, field in { "RunningAttack", "JumpAttack", "RollAttack", "GuardCounter" } do
 		local attack = (def :: any)[field]
 		if attack then
 			checkAnimation(attack.Animation, field)
-			local markers = Specs[attack.Animation] and Specs[attack.Animation].Markers
-			check(markers and markers.HitStart and markers.HitEnd, `{field} animation needs HitStart/HitEnd markers`)
+			checkWindow(attack.Animation, field)
 		end
 	end
 	checkAnimation(def.IdleAnimation, "Idle")
@@ -106,3 +121,4 @@ function WeaponRegistry.GetBehavior(weaponId: string): any
 end
 
 return WeaponRegistry
+

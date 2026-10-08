@@ -34,22 +34,24 @@ Reddit was blocked in every pass, so forum evidence comes from Steam, GameFAQs, 
 6. **Don't grind or inflate HP.** Players hated Hollow Realization's 10,000-use mastery and Echoes' and Lycoris' boss HP inflation. Echoes' flat leveling, with all skills by proficiency 10, was praised.
 7. **Loud, readable cues.** Last Recollection's Skill Connect window was hard to see. Canon pre-motion lights the weapon in the skill's color.
 
+Models and effects have their own plan: [[Weapon models and effects plan]].
+
 ## Phase 0. Shared systems first (before any new weapon)
 
 Building these once means every weapon class after them is mostly data plus animations.
 
 - [ ] **Publish animations.** Upload all 24 AnimSaves to the group through Open Cloud (enabled Oct 2025) or the Asphalt CLI, then write the ids into AnimationLibrary.Published. Right now nothing plays on live servers.
-- [ ] **Damage types.** Slash, Strike and Pierce tags on attacks. Pierce gets a counter-hit bonus (Elden Ring: +30% PvE, +15% PvP). Strike gets a bonus to guard and stamina damage.
-- [ ] **Protection windows per attack.** Replace the single HyperArmor flag with:
+- [x] (done 2026-10-08, [[Phase 0 shared combat systems]]) **Damage types.** Slash, Strike and Pierce tags on attacks. Pierce gets a counter-hit bonus (Elden Ring: +30% PvE, +15% PvP). Strike gets a bonus to guard and stamina damage.
+- [x] **Protection windows per attack.** Replace the single HyperArmor flag with:
   - a time window inside each attack
   - a level (none, flinch-proof, full)
   - damage taken during armor
   - Elden Ring varies this by class.
 - [ ] **Charge levels** as a generic attack field. The greatsword needs them, following the MH Hammer style.
-- [ ] **Per-class multipliers:** reach, crit/riposte (dagger 1.3 to 1.4x), and guard stamina damage.
-- [ ] **Stun manager.** Stuns never stack and the longest wins, plus a short immunity window after a stagger (from the fundamentals research).
-- [ ] **PvE/PvP multiplier tables.** Empty at first, so that balancing later is just data.
-- [ ] **One marker vocabulary checked automatically.** Every attack clip must have HitStart, HitEnd and CancelOpen. WeaponRegistry fails loudly otherwise (judgment).
+- [x] **Per-class multipliers:** reach, crit/riposte (dagger 1.3 to 1.4x), and guard stamina damage.
+- [x] **Stun manager.** Stuns never stack and the longest wins, plus a short immunity window after a stagger (from the fundamentals research).
+- [x] **PvE/PvP multiplier tables.** Empty at first, so that balancing later is just data.
+- [x] **One marker vocabulary checked automatically.** Every attack clip must have HitStart, HitEnd and CancelOpen. WeaponRegistry fails loudly otherwise (judgment).
 
 ## Phase 1. Fix up the animations (sword first)
 

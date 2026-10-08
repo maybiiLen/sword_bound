@@ -76,7 +76,28 @@ local CombatConfig = {
 	PoiseRegenDelay = 3, -- seconds without taking poise damage before poise refills
 	StaggerTime = 1.1,
 	FlinchTime = 0.35,
-	CritMultiplier = 1.5, -- damage x this against a staggered target
+	CritMultiplier = 1.5, -- damage x this against a staggered target (a weapon's CritMultiplier overrides it)
+	StaggerImmunityTime = 1.0, -- after a stagger ends, poise can't break into a new full stagger this long
+	                           -- (stops chain-staggering a target; PvP uses PvP.StaggerImmunityTime)
+
+	-- Damage types (2026-10-08; see CombatRules). Attacks set DamageType (default: the weapon's, else Slash).
+	--   CounterBonus  x damage when the hit lands while the target is Attacking or Charging
+	--   GuardStamina  x the stamina a blocked hit costs the blocker
+	DamageTypes = {
+		Slash = { CounterBonus = 1.1, GuardStamina = 1.0 },
+		Strike = { CounterBonus = 1.1, GuardStamina = 1.4 }, -- maces/hammers/axes: break guards
+		Pierce = { CounterBonus = 1.3, GuardStamina = 0.9 }, -- thrusts: punish attacks
+	} :: { [string]: { CounterBonus: number, GuardStamina: number } },
+	ArmorDamageTaken = 0.9, -- x damage taken while an attack's armor window is up (attack.Armor.DamageTaken overrides)
+
+	-- Player vs player only (PvP is off today; this is the hook for balancing it separately)
+	PvP = {
+		DamageMultiplier = 1.0,
+		PoiseMultiplier = 1.0,
+		CounterBonusScale = 0.5, -- keeps half of a damage type's counter bonus (ER: pierce +30% PvE, +15% PvP)
+		ArmorDamageTaken = 0.9,
+		StaggerImmunityTime = 3.0,
+	},
 
 	-- Lock-on
 	LockOnRange = 60,
@@ -142,3 +163,4 @@ local CombatConfig = {
 }
 
 return table.freeze(CombatConfig)
+
