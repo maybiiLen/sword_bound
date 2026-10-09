@@ -27,7 +27,7 @@ WHERE THINGS ARE
     Animations/AnimationLibrary, AnimationSet    id lookup + per-Animator track cache
     Remotes/              EquipRemote, AttackRemote, ActionRemote, HitRemote, ReactRemote,
                           EffectRemote, LevelUpRemote
-    Assets/AnimSaves      KeyframeSequences built from Specs (Studio-only playback until published)
+    Assets/AnimSaves      KeyframeSequences built from Specs (published ids in AnimationLibrary.Published)
     Assets/WeaponModels   WeaponTemplate (copy me), StarterSword, TestSword
     Assets/VFX            HitSpark
     Assets/Sounds         Swing, Lunge, HeavySwing, Draw, Sheath, Hit, Block, Parry, Roll, GuardBreak
@@ -42,11 +42,12 @@ WHERE THINGS ARE
 
 CONTROLS  (CombatConfig.Inputs)
   Light attack      press Left mouse / R1         (swings on PRESS; does nothing while sheathed, E draws)
-  Heavy attack      keep holding Left mouse / R1  (still held at HeavyHoldThreshold 0.2 s = the light
+  Heavy attack      keep holding Left mouse / R1  (still held at HeavyHoldThreshold 0.14 s = the light
                                                   turns into a heavy charge, stamina refunded; release
                                                   swings; longer hold = more damage + poise damage)
-  Running attack    attack while sprinting        (weapons without RunningAttack: Light1 lunges
-                                                  SprintAttackLungeMultiplier x further)
+  Running attack    attack while sprinting        (a lunging one-arm thrust that carries you up to 8 studs
+                                                  into the target; weapons without RunningAttack: Light1
+                                                  lunges SprintAttackLungeMultiplier x further)
   Jump attack       attack in the air             (plunges down, hyper armor)
   Roll attack       attack out of a roll/backstep (or within RollAttackWindow 0.3 s after it)
   Guard counter     attack within GuardCounterWindow 0.6 s of blocking or parrying a hit
@@ -66,14 +67,18 @@ STATE MACHINE  (WeaponController on the client, mirrored by CombatService on the
       CancelOpen  the next attack may start
       RollOpen    a roll/backstep may start (defaults to CancelOpen if the spec has none)
       MoveOpen    the action is over: state goes back to Idle, full move speed
-    Light1/Light2 = 0.50 / 0.58 / 0.72 s, Light3 = 0.64 / 0.72 / 0.95 s. No cancel on wind-up.
+    Light1/Light2 = 0.42 / 0.48 / 0.62 s, Light3 = 0.54 / 0.62 / 0.80 s (2026-10-08 timing pass:
+    lights hit at 0.19 s, the finisher at 0.27 s; Specs.retime maps the old key times).
+    No cancel on wind-up except WindupCancelTime below.
   - Settle tail: after MoveOpen the attack track keeps playing its follow-through back to
     guard (cosmetic, no gameplay effect). Moving, blocking, charging, rolling or attacking
     fades it out (BaseWeapon:StopSettle), so feet never slide.
   - Input buffer: a press is remembered for InputBufferTime and fires the moment its own
     window opens (a light at CancelOpen, a roll at RollOpen). The newest press replaces an
     older one, so a panic roll is never eaten by a queued attack.
-  - Light combo: Light1 -> Light2 -> Light3 (heavier finisher), resets after ComboResetTime.
+  - Light combo: Light1 -> Light2 -> Light3 (heavier finisher that knocks non-player targets back
+    Knockback = 4 studs, skipped on a staggered target so ripostes stay in range), resets after
+    ComboResetTime.
   - Flinch: a hit that doesn't break poise interrupts the current action for FlinchTime,
     unless the attack's armor window is up (HyperArmor / Armor, see "Damage types, armor, stun
     rules"; heavy, jump attack and guard counter have it). The server decides and the client obeys.
@@ -81,9 +86,21 @@ STATE MACHINE  (WeaponController on the client, mirrored by CombatService on the
     attacking/charging/blocking; SprintServer multiplies WalkSpeed by it.
   - Momentum (2026-09-30): attacks no longer stop you dead. The client carries your current
     velocity into the swing and eases it out over MomentumCarryTime; Attacking walk speed is
-    0.3 (was 0.15). The Lunge (~2 studs at Lunge 1) steers toward the lock-on target, or the
-    nearest living enemy inside LungeAssistAngle in front, within LungeAssistRange, stops
-    LungeStopDistance short of it, and is cut the moment the blade connects (weapon.HitLanded).
+    0.3 (was 0.15).
+  - Attack aim and warp (2026-10-08, vault "Sword combat feel revision"):
+      Target    locked on: the lock target if within LockedWarpRange (16), else none. Not locked:
+                the best living enemy (players only with PvP on) inside LungeAssistAngle (60 deg)
+                of the aim direction (move input, else camera look) within SoftTargetRange (10;
+                longer for long-warp attacks), angle first, distance second.
+      Turning   toward that target at SoftTurnRate.Windup (720 deg/s) until HitStart, Active
+                (180 deg/s) until HitEnd, then committed (MovementController:SetFacingTarget).
+      Warp      on the Lunge marker: travel = distance - WarpStopDistance (3.5), capped at the
+                attack's Warp (lights 4, finisher 3, running 8, heavy 3) and scaled down to
+                WarpSideScale toward the edge of the cone (CombatRules.WarpDistance). Re-aimed every
+                frame until HitStart, stops short of walls, cut when the blade connects.
+                No target: the old fixed step (Lunge x ~2 studs) so whiffs still move you.
+      Server    a hit beyond Reach + ReachTolerance but inside the attack's warp is measured again
+                WarpReachRecheck (0.25 s) later, after the warp replicated, and must then be in reach.
   - Wind-up cancel: the first WindupCancelTime (0.15 s) of a light can be cancelled into block
     or roll (Sekiro style; the light's stamina is not refunded, so feints cost). Block may also
     cancel an attack's recovery once CancelOpen is reached.
@@ -147,10 +164,10 @@ CONTEXTUAL ATTACKS  (2026-10-01)
     HyperArmor, Sound) plus optional Plunge (downward studs/s on the Lunge marker). Swords get
     them from Combat.ClassDefaults.Sword; a weapon can override any field or leave one out.
   - Sword numbers (Light1 = 1.0x damage, 12 poise):
-      Running attack  1.3x, 24 poise, 16 stamina, Lunge 2.2, long leaning forehand slash
-      Jump attack     1.5x, 30 poise, 18 stamina, hyper armor, Lunge 1, Plunge 55, overhead chop
-      Roll attack     1.1x, 14 poise, 12 stamina, Lunge 1.6, quick rising thrust (hits at 0.13 s)
-      Guard counter   1.6x, 36 poise, 16 stamina, hyper armor, rising cut out of the guard
+      Running attack  1.3x, 24 poise, 16 stamina, Pierce, Warp 8, lunging one-arm thrust (hits at 0.2 s)
+      Jump attack     1.5x, 30 poise, 18 stamina, hyper armor, Warp 2, Plunge 55, overhead chop
+      Roll attack     1.1x, 14 poise, 12 stamina, Warp 3, low rising slash out of the crouch (hits at 0.11 s)
+      Guard counter   1.6x, 36 poise, 16 stamina, hyper armor, Warp 2.5, rising cut out of the guard
     Ratios follow Elden Ring's stance damage order (running < jump < guard counter) but toned
     down (players call ER's jump attack overtuned). Exact values are judgment calls.
     Research: Project doc claude/worklog.md (2026-10-01 entry).
@@ -177,6 +194,8 @@ TESTING  (Studio only)
   script can press inputs with exact timing: :Fire("Attack" | "Block" | "Roll", pressed).
   Studio's simulated mouse/keyboard input is too slow (100 ms to 1 s between steps) for windows
   like RollAttackWindow or the parry window.
+  Pose check without play testing: ServerStorage.CombatDev.PosePreview.Show({ { "RunningAttack",
+  { 0, 0.2 } } }) lays out posed R15 rigs with the sword from the AnimSaves keyframes (see its header).
   Unit tests (2026-10-08): ServerStorage.CombatDev.Tests covers CombatRules, every Specs hit
   window and the WeaponRegistry merge. In a playtest, Server command bar:
     print(require(game.ServerStorage.CombatDev.Tests).Run())
@@ -239,10 +258,12 @@ ANIMATIONS  (Animations/Specs -> AnimationBuilder -> Assets/AnimSaves)
   Rebuild after editing Specs (Studio command bar):
     require(game.ServerStorage.CombatDev.AnimationBuilder:Clone()).Build(
       require(game.ReplicatedStorage.Combat.Animations.Specs:Clone()))
-  In Studio the saves are registered at runtime, so they play in playtests without uploading.
-  For live servers: right-click each KeyframeSequence in Assets/AnimSaves -> Save to Roblox
-  (or publish via the Animation Editor) and paste the ids into AnimationLibrary's Published
-  table. Until then live players fall back to the old Roblox-owned R6/R15 ids.
+  In Studio the saves are registered at runtime and win over Published, so playtests always
+  show the latest specs. For live servers (2026-10-09: all 24 published to the group):
+    require(game.ServerStorage.CombatDev.AnimationBuilder:Clone()).Publish()
+  uploads every AnimSaves sequence under the game's group with CreateAssetAsync and rewrites
+  AnimationLibrary.Published. Re-publish after Specs changes are final, or live servers keep
+  the old motion (timing comes from Specs either way). Publish({ "Light1" }) does just one.
 
 CAMERA + LOCK-ON
   While the weapon is drawn: over-the-shoulder orbit camera (mouse locked, wheel zoom,

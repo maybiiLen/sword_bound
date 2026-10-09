@@ -53,14 +53,24 @@ equipment reference)
                           real, the others are empty placeholders) and DetailCard (name, Weapon ATK,
                           Reach, icon, STR/DEX/AGI/INT, Unique MOD, EX-MOD, EquipButton). MOD and
                           stat boxes are placeholders until those systems exist
-    Body.ItemsPanel       right: CategoryBar (only Swords is real), SearchBar, ItemGrid, Footer
-                          (Weapons Held count, Lock/Unlock = placeholder, Sort A-Z/Z-A works)
+    Body.ItemsPanel       right: FilterBar (FilterButton + SortButton), SearchBar, ItemGrid, Footer
+                          (Weapons Held count, Lock/Unlock = placeholder). ONE list shows every weapon;
+                          there are no category tabs. See FILTER AND SORT below.
   MountsBody is the Mounts tab (restyled dark, sits in the right group). The tab switch hides Body,
   so the character + stats are hidden on the Mounts tab.
 
+FILTER AND SORT
+  - FilterButton opens a dropdown: "All" plus one entry per weapon class in WeaponRegistry (the weapon
+    definition's Class, shown plural: Sword -> Swords). A new weapon class appears here by itself.
+  - SortButton opens a dropdown: Name A-Z, Name Z-A, ATK High-Low, ATK Low-High (ties sort by name).
+    Add a mode by adding an entry to SORTS in InventoryItemsController.
+  - The menus are built in code (DropdownMenu + a transparent DropdownBlocker behind it that closes the
+    menu on any outside click); they close when the panel closes. Filter, Sort and the SearchBox combine.
+    EmptyLabel ("No weapons found") shows when nothing matches.
+
 UI NOTES
-  - Slots are the pre-built ItemSlot1..100 buttons; owned weapons fill them by DisplayName (Sort
-    toggles A-Z / Z-A); the SearchBox filters by name. Unused slots stay empty. The controller sets
+  - Slots are the pre-built ItemSlot1..100 buttons; owned weapons fill them in the chosen Sort order
+    (default Name A-Z); the SearchBox filters by name. Unused slots stay empty. The controller sets
     the grid CellSize so 5 square cells fill the width.
   - Each slot gets a ViewportFrame icon of the weapon model, a name label, an "EquippedBadge" (E)
     if equipped and a "SelectedMarker" outline if selected. Both are child Frames/labels, never
@@ -83,7 +93,7 @@ screen and grow taller toward the screen edges; nothing is rotated)
   CONTENTS follow the same perspective (subtle, a degree or so): each element is rotated about its center by
   the slope of its own height (top bands rise toward the screen edge, bottom ones fall) and, in the right
   group, the two columns are stretched vertically by their position (SlotsPanel ~1%, ItemsPanel ~3%).
-    - RIGHT: TitleBar, TabBar, SlotsPanel.SlotList / DetailCard, ItemsPanel.CategoryBar / SearchBar / Footer
+    - RIGHT: TitleBar, TabBar, SlotsPanel.SlotList / DetailCard, ItemsPanel.FilterBar / SearchBar / Footer
     - LEFT: each StatsPanel Stat_ row and the LevelLabel (rows above the middle fall toward the inner end,
       rows below it rise, and they shrink a little toward the inner end)
     - ItemGrid is deliberately NOT rotated (a rotated ScrollingFrame can't clip); only its column is stretched

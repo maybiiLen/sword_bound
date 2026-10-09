@@ -16,7 +16,10 @@ export type AttackDefinition = {
 	StaminaCost: number,
 	PoiseDamage: number, -- breaks the target's poise (stagger) when it reaches 0
 	Weight: string, -- "Light" | "Heavy": hit-stop and camera shake strength (CombatConfig.HitStop/Shake)
-	Lunge: number?, -- x CombatConfig.LungeSpeed forward push on the "Lunge" marker (0/nil = none)
+	Lunge: number?, -- x CombatConfig.LungeSpeed forward step on the "Lunge" marker when there is no target
+	Warp: number?, -- max studs the attack travels toward a target from the Lunge marker (default
+	               -- CombatConfig.DefaultWarp); it stops WarpStopDistance short. See CombatRules.WarpDistance
+	Knockback: number?, -- studs a non-player target is pushed away on a clean hit (combo finishers)
 	HyperArmor: boolean?, -- true: taking a hit doesn't flinch you out of this attack (poise break still does)
 	Sound: string?, -- Sound name in Combat.Assets.Sounds played at swing start
 	Plunge: number?, -- jump attacks: downward speed (studs/s) set on the "Lunge" marker, slams you to the ground

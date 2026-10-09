@@ -18,8 +18,9 @@ local CombatConfig = {
 	LockOnInputs = { Enum.UserInputType.MouseButton3, Enum.KeyCode.F, Enum.KeyCode.ButtonR3 } :: { any }, -- not Tab: Roblox uses it for the player list
 	ToggleWeaponInputs = { Enum.KeyCode.E, Enum.KeyCode.ButtonY } :: { any },
 	FreeCursorKeys = { Enum.KeyCode.LeftAlt } :: { any }, -- hold to unlock the mouse while in combat camera
-	HeavyHoldThreshold = 0.2, -- the light swings on PRESS; still holding at this point turns it into a heavy
-	                          -- charge (must stay below the light attacks' HitStart)
+	HeavyHoldThreshold = 0.14, -- the light swings on PRESS; still holding at this point turns it into a heavy
+	                           -- charge (must stay below every light attack's HitStart, 0.19 since the
+	                           -- 2026-10-08 timing pass; a unit test checks it)
 	HeavyFullCharge = 1.0, -- seconds of charging for the full-charge bonus
 	InputBufferTime = 0.35, -- presses this long before an action can cancel are queued
 	WindupCancelTime = 0.15, -- a light attack's first 0.15 s can be cancelled into block or roll (Sekiro style)
@@ -32,11 +33,26 @@ local CombatConfig = {
 	-- Movement
 	RollSpeed = 30, -- studs/s at the start of a roll, eases out over the roll
 	BackstepSpeed = 22,
-	LungeSpeed = 20, -- forward push on an attack's "Lunge" marker (x attack.Lunge); ~2 studs at Lunge 1
+	LungeSpeed = 20, -- forward step on an attack's "Lunge" marker when there is NO target (x attack.Lunge);
+	                 -- ~2 studs at Lunge 1, so a whiff still moves you
 	LungeTime = 0.15,
-	LungeAssistRange = 8, -- lunges steer toward the lock-on target (or the nearest enemy in front) in range
-	LungeAssistAngle = 60, -- half-angle in degrees of the "in front" cone when not locked on
-	LungeStopDistance = 3.2, -- ...and stop this far from it instead of overshooting
+	LungeAssistAngle = 60, -- half-angle in degrees of the cone attacks look for a target in (not locked on)
+
+	-- Attack warp (2026-10-08, "Sword combat feel revision" in the vault). With a target, the Lunge
+	-- marker becomes a warp: travel = distance to target - WarpStopDistance, clamped to the attack's
+	-- Warp (studs), re-aimed every frame until HitStart, so the swing always lands at blade range.
+	-- Modeled on Unreal Motion Warping; distances are starting values for playtesting (unsourced).
+	WarpStopDistance = 3.5, -- end this far from the target's root (blade reach is 7, so it lands mid blade)
+	DefaultWarp = 3, -- studs, for attacks that don't set Warp
+	WarpSideScale = 0.4, -- a target at the edge of the cone gets this fraction of the warp (God of War style)
+	WarpMaxSpeed = 75, -- studs/s cap on the warp velocity
+	SoftTargetRange = 10, -- not locked on: attacks aim at the best enemy in the cone this close
+	LockedWarpRange = 16, -- locked on: the warp works on the lock target this close
+	SoftTurnRate = { Windup = 720, Active = 180 }, -- degrees/s the character turns toward the target
+	                                              -- (TDM pattern: fast in windup, slow mid swing, none after)
+	KnockbackTime = 0.22, -- seconds an attack's Knockback (studs) pushes a non-player target
+	WarpReachRecheck = 0.25, -- server: a hit beyond Reach + ReachTolerance (but inside the warp allowance)
+	                         -- is checked again this much later, once the attacker's warp has replicated
 	MomentumCarryTime = 0.18, -- an attack keeps your current velocity and eases it out over this long
 	SprintAttackLungeMultiplier = 1.8, -- Light1 started while sprinting lunges this much further
 	                                   -- (only for weapons without a RunningAttack)

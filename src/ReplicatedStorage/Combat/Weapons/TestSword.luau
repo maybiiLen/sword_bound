@@ -25,6 +25,7 @@ return {
 			PoiseDamage = 12,
 			Weight = "Light",
 			Lunge = 1,
+			Warp = 4, -- travels up to 4 studs to the target (CombatRules.WarpDistance)
 			Sound = "Swing",
 		},
 		{
@@ -34,6 +35,7 @@ return {
 			PoiseDamage = 12,
 			Weight = "Light",
 			Lunge = 1,
+			Warp = 4, -- travels up to 4 studs to the target (CombatRules.WarpDistance)
 			Sound = "Swing",
 		},
 		{
@@ -43,6 +45,8 @@ return {
 			PoiseDamage = 20,
 			Weight = "Heavy",
 			Lunge = 1.4,
+			Warp = 3,
+			Knockback = 4, -- finisher: pushes the target 4 studs away (ends the string, like TSB/Deepwoken)
 			Sound = "Lunge",
 		},
 	},
@@ -57,9 +61,12 @@ return {
 		FullChargePoiseBonus = 0.5,
 		Weight = "Heavy",
 		Lunge = 2,
+		Warp = 3,
+		Knockback = 3,
 		HyperArmor = true,
 		Sound = "HeavySwing",
 	},
 
 	Skills = {},
 }
+

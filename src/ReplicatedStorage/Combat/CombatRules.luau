@@ -18,6 +18,10 @@
 		CombatRules.StaggerUpdate(currentEnd, currentKind, now, duration, kind)
 			-> (newEnd, newKind)                                 longest stun wins
 		CombatRules.StaggerImmunity(pvp?) -> seconds
+		CombatRules.WarpOf(attack) -> studs                       attack.Warp, else CombatConfig.DefaultWarp
+		CombatRules.WarpDistance(distance, angle, maxWarp) -> studs
+		                                                         how far an attack travels toward a target
+		                                                         `distance` away, `angle` degrees off the aim
 
 	Tuning numbers live in CombatConfig (DamageTypes, ArmorDamageTaken, StaggerImmunityTime, PvP).
 	See Docs.Combat > "Damage types, armor, stun rules" and the vault note "Phase 0 shared combat systems".
@@ -175,6 +179,27 @@ function CombatRules.StaggerImmunity(pvp: boolean?): number
 		return CombatConfig.PvP.StaggerImmunityTime
 	end
 	return CombatConfig.StaggerImmunityTime
+end
+
+-- Attack warp (see CombatConfig "Attack warp"). The server also uses WarpOf to widen its reach check,
+-- because it sees the attacker's position a little late.
+function CombatRules.WarpOf(attack: any): number
+	if attack and typeof(attack.Warp) == "number" then
+		return attack.Warp
+	end
+	return CombatConfig.DefaultWarp
+end
+
+-- Travel toward a target `distance` studs away, `angle` degrees off the aim direction: close the gap
+-- to WarpStopDistance, scaled down toward the edge of the cone, never more than maxWarp, never back.
+function CombatRules.WarpDistance(distance: number, angle: number, maxWarp: number): number
+	local gap = distance - CombatConfig.WarpStopDistance
+	if gap <= 0 or maxWarp <= 0 then
+		return 0
+	end
+	local edge = math.clamp(angle / CombatConfig.LungeAssistAngle, 0, 1)
+	local scale = 1 - (1 - CombatConfig.WarpSideScale) * edge
+	return math.min(gap, maxWarp * scale)
 end
 
 return CombatRules

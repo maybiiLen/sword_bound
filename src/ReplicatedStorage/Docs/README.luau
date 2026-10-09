@@ -46,6 +46,19 @@ QUICK HOW-TOS
   Read a player's level:      player:GetAttribute("ClassLevel") / ("Level_Sword") anywhere
 
 CHANGELOG  (newest first; one line per change, with your name)
+  2026-10-09  Henry  Combat animations published for live servers: all 24 AnimSaves uploaded to the group and
+                     filled into AnimationLibrary.Published (before this, live R15 players had no sword
+                     animations). New AnimationBuilder.Publish() redoes it after Specs changes; Studio playtests
+                     still use the local saves first. See Docs.Combat > ANIMATION PIPELINE. (via Claude)
+  2026-10-09  Henry  Sword combat feel pass: attacks now travel to the enemy and stop at blade range (attack
+                     warp, up to 4 studs for lights, 8 for the running attack) and aim at the enemy in front even
+                     without lock-on. Lights land at 0.19 s (was 0.26) and chain every ~0.42 s. The 3rd hit knocks
+                     enemies back 4 studs. New running attack (lunging thrust) and roll attack (low rising slash)
+                     animations. Hold-to-heavy threshold 0.14 s. New dev tool CombatDev.PosePreview. See
+                     Docs.Combat > MOVEMENT and the vault note "Sword combat feel revision". (via Claude)
+  2026-10-08  Henry  Inventory: removed the Swords/Daggers/Axes/Spears/Hammers tabs; one list now shows every
+                     weapon. New Filter (by weapon class) and Sort (name or ATK) dropdowns in ItemsPanel.FilterBar,
+                     the old footer Sort button moved there. See Docs.Inventory > FILTER AND SORT. (via Claude)
   2026-10-08  Henry  Weapons + effects round 1: new ServerStorage.CombatDev.WeaponForge builds weapon models from
                      code and publishes the meshes (5 class weapons: ForgeSword, ForgeDagger, ForgeRapier,
                      ForgeGreatsword, ForgeGreataxe; StarterSword now uses ForgeSword). New Combat.VFX: hit effects

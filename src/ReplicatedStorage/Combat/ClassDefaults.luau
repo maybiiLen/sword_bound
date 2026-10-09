@@ -30,16 +30,21 @@ return {
 			DamageType = "Pierce",
 			DamageMultiplier = 2.5, -- x weapon Damage; the weapon's CritMultiplier applies on top (target is staggered)
 			Range = 5.5,
+			Warp = 0, -- the riposte has its own lunge and hold
 			Weight = "Heavy",
 			Sound = "Lunge",
 		},
-		RunningAttack = { -- sprint + attack: a long lunging slash that closes distance
+		RunningAttack = { -- sprint + attack: a leaning one-arm thrust that carries the sprint up to 8
+			-- studs into the target and stops on contact (2026-10-08: its own move, the only straight-line
+			-- attack in the kit; inspired by DMC's Stinger and SAO's Rage Spike, see the vault)
 			Animation = "RunningAttack",
 			DamageMultiplier = 1.3,
 			StaminaCost = 16,
 			PoiseDamage = 24,
 			Weight = "Heavy",
-			Lunge = 2.2,
+			DamageType = "Pierce",
+			Lunge = 3,
+			Warp = 8,
 			Sound = "Lunge",
 		},
 		JumpAttack = { -- attack in the air: overhead plunge that slams down
@@ -50,17 +55,19 @@ return {
 			Weight = "Heavy",
 			HyperArmor = true,
 			Lunge = 1, -- carries you forward into range (assist stops short of the target)
+			Warp = 2,
 			Plunge = 55,
 			Sound = "HeavySwing",
 		},
-		RollAttack = { -- attack out of a roll: quick rising thrust
+		RollAttack = { -- attack out of a roll: low rising slash from the crouch (2026-10-08: was a thrust,
+			-- which now belongs to the running attack)
 			Animation = "RollAttack",
 			DamageMultiplier = 1.1,
 			StaminaCost = 12,
 			PoiseDamage = 14,
 			Weight = "Light",
-			DamageType = "Pierce",
 			Lunge = 1.6,
+			Warp = 3,
 			Sound = "Swing",
 		},
 		GuardCounter = { -- attack right after blocking/parrying a hit: heavy rising cut out of the guard
@@ -71,6 +78,7 @@ return {
 			Weight = "Heavy",
 			HyperArmor = true,
 			Lunge = 1.2,
+			Warp = 2.5,
 			Sound = "HeavySwing",
 		},
 	},

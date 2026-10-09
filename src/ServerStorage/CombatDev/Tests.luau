@@ -198,12 +198,64 @@ test("WeaponRegistry: Sword weapons get the class stats and thrust types", funct
 			expectTrue(typeof(definition.GuardDamage) == "number", `{id} GuardDamage`)
 			local rollAttack = (definition :: any).RollAttack
 			local riposte = (definition :: any).Riposte
-			expectEqual(CombatRules.DamageTypeOf(rollAttack, definition), "Pierce", `{id} RollAttack`)
+			expectEqual(CombatRules.DamageTypeOf(rollAttack, definition), "Slash", `{id} RollAttack (rising slash since 2026-10-08)`)
+			expectEqual(CombatRules.DamageTypeOf((definition :: any).RunningAttack, definition), "Pierce", `{id} RunningAttack (thrust)`)
 			expectEqual(CombatRules.DamageTypeOf(riposte, definition), "Pierce", `{id} Riposte`)
 			expectEqual(CombatRules.DamageTypeOf(definition.Combo[1], definition), "Slash", `{id} Combo[1]`)
 		end
 	end
 	expectTrue(count > 0, "no Sword weapons loaded (did WeaponRegistry reject them? check warnings)")
+end)
+
+-- Attack warp (2026-10-08) -------------------------------------------------------------------
+
+test("WarpDistance: closes the gap to WarpStopDistance", function()
+	local stop = CombatConfig.WarpStopDistance
+	expectNear(CombatRules.WarpDistance(stop + 2, 0, 4), 2, "short gap")
+	expectNear(CombatRules.WarpDistance(stop + 10, 0, 4), 4, "capped at maxWarp")
+end)
+
+test("WarpDistance: never moves when already in range", function()
+	local stop = CombatConfig.WarpStopDistance
+	expectNear(CombatRules.WarpDistance(stop, 0, 4), 0, "at stop distance")
+	expectNear(CombatRules.WarpDistance(stop - 1, 0, 4), 0, "inside stop distance")
+	expectNear(CombatRules.WarpDistance(stop + 5, 0, 0), 0, "no warp")
+end)
+
+test("WarpDistance: shrinks toward the edge of the cone", function()
+	local stop = CombatConfig.WarpStopDistance
+	local edge = CombatConfig.LungeAssistAngle
+	expectNear(CombatRules.WarpDistance(stop + 10, edge, 4), 4 * CombatConfig.WarpSideScale, "cone edge")
+	local half = CombatRules.WarpDistance(stop + 10, edge / 2, 4)
+	expectNear(half, 4 * (1 - (1 - CombatConfig.WarpSideScale) * 0.5), "half way")
+	expectNear(CombatRules.WarpDistance(stop + 10, edge * 2, 4), 4 * CombatConfig.WarpSideScale, "clamped past the edge")
+end)
+
+test("WarpOf: attack Warp, else DefaultWarp", function()
+	expectEqual(CombatRules.WarpOf({ Warp = 8 }), 8, "attack")
+	expectEqual(CombatRules.WarpOf({}), CombatConfig.DefaultWarp, "default")
+	expectEqual(CombatRules.WarpOf(nil), CombatConfig.DefaultWarp, "nil")
+end)
+
+test("Sword timing pass: lights land by 0.2 s, running attack is the longest warp", function()
+	for id, definition in WeaponRegistry.GetAll() do
+		if definition.Class == "Sword" then
+			local first = definition.Combo[1]
+			local hitStart = AnimationLibrary.MarkerTime(first.Animation, "HitStart") or math.huge
+			expectTrue(hitStart <= 0.2, `{id} Light1 HitStart {hitStart}`)
+			local running = (definition :: any).RunningAttack
+			for _, attack in definition.Combo do
+				expectTrue(CombatRules.WarpOf(running) > CombatRules.WarpOf(attack), `{id} running warp vs {attack.Animation}`)
+			end
+			local finisher = definition.Combo[#definition.Combo]
+			expectTrue((finisher.Knockback or 0) > 0, `{id} finisher knockback`)
+			-- holding attack turns a light into a heavy only before its HitStart
+			for _, attack in definition.Combo do
+				local start = AnimationLibrary.MarkerTime(attack.Animation, "HitStart") or 0
+				expectTrue(CombatConfig.HeavyHoldThreshold < start - 0.03, `{id} HeavyHoldThreshold vs {attack.Animation} HitStart {start}`)
+			end
+		end
+	end
 end)
 
 -- Runner -------------------------------------------------------------------------------------

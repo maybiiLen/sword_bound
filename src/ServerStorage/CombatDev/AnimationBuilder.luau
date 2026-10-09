@@ -12,6 +12,9 @@
 		require(game.ServerStorage.CombatDev.AnimationBuilder:Clone()).Build(Specs)
 	(Clone() sidesteps the require cache so edits are picked up.)
 
+	Then publish for live servers (2026-10-09): AnimationBuilder.Publish() uploads them and fills
+	AnimationLibrary.Published (see Publish below).
+
 	Re-running overwrites the generated sequences. If an animator has polished one in the
 	Animation Editor, rename it (e.g. Light1_Polished) so the builder never overwrites it.
 	See Docs.Combat > "Animation pipeline".
@@ -264,4 +267,70 @@ function AnimationBuilder.Build(specs): { string }
 	return built
 end
 
+--[[
+	Publish (2026-10-09): upload the AnimSaves sequences (all, or `names`) as Animation assets owned
+	by the game's creator (the group, so live servers may play them) with
+	AssetService:CreateAssetAsync, then rewrite the ids in AnimationLibrary's Published table.
+	Edit mode only; needs the Studio beta "CreateAssetAsync Luau API". Each run makes new assets,
+	so publish after Specs changes are final, not on every tweak.
+		require(game.ServerStorage.CombatDev.AnimationBuilder:Clone()).Publish()            -- all
+		require(game.ServerStorage.CombatDev.AnimationBuilder:Clone()).Publish({ "Light1" }) -- some
+]]
+function AnimationBuilder.Publish(names: { string }?): string
+	local AssetService = game:GetService("AssetService")
+	local folder = ReplicatedStorage.Combat.Assets.AnimSaves
+	local library = ReplicatedStorage.Combat.Animations.AnimationLibrary
+	local list: { string } = {}
+	if names then
+		list = names
+	else
+		for _, child in folder:GetChildren() do
+			if child:IsA("KeyframeSequence") then
+				table.insert(list, child.Name)
+			end
+		end
+		table.sort(list)
+	end
+	local creatorType = Enum.AssetCreatorType.User
+	if game.CreatorType == Enum.CreatorType.Group then
+		creatorType = Enum.AssetCreatorType.Group
+	end
+	local source = (library :: ModuleScript).Source
+	local published = {}
+	local failed = {}
+	for _, name in list do
+		local sequence = folder:FindFirstChild(name)
+		if sequence and sequence:IsA("KeyframeSequence") then
+			local ok, result, assetId = pcall(function()
+				return AssetService:CreateAssetAsync(sequence:Clone(), Enum.AssetType.Animation, {
+					Name = "SwordBound_" .. name,
+					Description = "Sword Bound combat animation " .. name .. " (AnimationBuilder spec)",
+					CreatorId = game.CreatorId,
+					CreatorType = creatorType,
+				})
+			end)
+			if ok and result == Enum.CreateAssetResult.Success then
+				-- the Published table comes first in AnimationLibrary, so the first match is the right line
+				local pattern = "\n\t" .. name .. ' = "[^"]*",'
+				local replacement = "\n\t" .. name .. ' = "rbxassetid://' .. tostring(assetId) .. '",'
+				local newSource, count = source:gsub(pattern, replacement, 1)
+				if count == 1 then
+					source = newSource
+					sequence:SetAttribute("PublishedId", assetId)
+					table.insert(published, name .. "=" .. tostring(assetId))
+				else
+					table.insert(failed, name .. " (no line in Published)")
+				end
+			else
+				table.insert(failed, name .. " (" .. tostring(result) .. ")")
+			end
+		else
+			table.insert(failed, name .. " (not in AnimSaves)")
+		end
+	end
+	(library :: ModuleScript).Source = source
+	return `published {#published}: {table.concat(published, ", ")}` .. (if #failed > 0 then `\nfailed: {table.concat(failed, ", ")}` else "")
+end
+
 return AnimationBuilder
+

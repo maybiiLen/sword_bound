@@ -6,8 +6,11 @@
 		                        those systems exist)
 		- Body.SlotsPanel       SlotList rows (Weapon is live; Jacket/Gloves/Pants/Shield are empty
 		                        placeholders) and the DetailCard of the selected item with an Equip button
-		- Body.ItemsPanel       CategoryBar (only Swords exists), SearchBar, ItemGrid with one ItemSlot per
-		                        owned weapon (3D icon + name), Footer (count, Sort; Lock is a placeholder)
+		- Body.ItemsPanel       FilterBar (Filter by weapon class + Sort dropdowns; everything lives in ONE
+		                        list, there are no category tabs), SearchBar, ItemGrid with one ItemSlot per
+		                        owned weapon (3D icon + name), Footer (count; Lock is a placeholder)
+		                        Filter options come from the classes in WeaponRegistry, so a new weapon class
+		                        shows up in the Filter menu on its own.
 	Click a grid weapon (or the Weapon row) to select it and see its details; press Equip to send
 	EquipRemote("Equip", weaponId). The server (InventoryService + WeaponService) decides whether it
 	is allowed; this script only displays what the server says. Owned weapons come from
@@ -42,6 +45,9 @@ local itemGrid = itemsPanel:WaitForChild("ItemGrid")
 local gridLayout = itemGrid:WaitForChild("UIGridLayout")
 local searchBox = itemsPanel:WaitForChild("SearchBar"):WaitForChild("SearchBox")
 local footer = itemsPanel:WaitForChild("Footer")
+local filterBar = itemsPanel:WaitForChild("FilterBar")
+local filterButton = filterBar:WaitForChild("FilterButton") :: TextButton
+local sortButton = filterBar:WaitForChild("SortButton") :: TextButton
 
 local Combat = ReplicatedStorage:WaitForChild("Combat")
 local CombatConfig = require(Combat:WaitForChild("CombatConfig"))
@@ -64,7 +70,8 @@ local owned: { string } = {}
 local fetched = false
 local selectedRow = "Weapon" -- Weapon / Jacket / Gloves / Pants / Shield
 local selectedWeapon: string? = nil
-local sortAscending = true
+local filterClass: string? = nil -- nil = show every weapon class
+local sortIndex = 1 -- index into SORTS
 
 -- ItemSlot1, ItemSlot2, ... in numeric order
 local slots: { TextButton } = {}
@@ -84,6 +91,67 @@ local visibleCount = #slots -- slots actually shown (visibleRows * COLUMNS), set
 local function displayName(weaponId: string): string
 	local definition = WeaponRegistry.Get(weaponId)
 	return definition and definition.DisplayName or weaponId
+end
+
+local function classOf(weaponId: string): string
+	local definition = WeaponRegistry.Get(weaponId)
+	return definition and definition.Class or "Other"
+end
+
+local function classLabel(className: string): string
+	return className .. "s" -- Sword -> Swords
+end
+
+local function damageOf(weaponId: string): number
+	local definition = WeaponRegistry.Get(weaponId)
+	return definition and definition.Damage or 0
+end
+
+-- Sort menu entries; ties fall back to the name so the order is always stable
+local SORTS: { { Label: string, Less: (string, string) -> boolean } } = {
+	{ Label = "Name A-Z", Less = function(a, b) return displayName(a) < displayName(b) end },
+	{ Label = "Name Z-A", Less = function(a, b) return displayName(a) > displayName(b) end },
+	{
+		Label = "ATK High-Low",
+		Less = function(a, b)
+			if damageOf(a) ~= damageOf(b) then
+				return damageOf(a) > damageOf(b)
+			end
+			return displayName(a) < displayName(b)
+		end,
+	},
+	{
+		Label = "ATK Low-High",
+		Less = function(a, b)
+			if damageOf(a) ~= damageOf(b) then
+				return damageOf(a) < damageOf(b)
+			end
+			return displayName(a) < displayName(b)
+		end,
+	},
+}
+
+local emptyLabel = Instance.new("TextLabel")
+emptyLabel.Name = "EmptyLabel"
+emptyLabel.BackgroundTransparency = 1
+emptyLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+emptyLabel.Position = UDim2.fromScale(0.5, 0.26)
+emptyLabel.Size = UDim2.fromScale(0.8, 0.05)
+emptyLabel.Font = Enum.Font.GothamMedium
+emptyLabel.Text = "No weapons found"
+emptyLabel.TextColor3 = Color3.fromRGB(150, 158, 166)
+emptyLabel.TextScaled = true
+emptyLabel.ZIndex = itemGrid.ZIndex + 2
+emptyLabel.Visible = false
+local emptyLimit = Instance.new("UITextSizeConstraint")
+emptyLimit.MaxTextSize = 14
+emptyLimit.MinTextSize = 4
+emptyLimit.Parent = emptyLabel
+emptyLabel.Parent = itemsPanel
+
+local function updateToolbar()
+	filterButton.Text = "Filter: " .. (if filterClass then classLabel(filterClass) else "All")
+	sortButton.Text = "Sort: " .. SORTS[sortIndex].Label
 end
 
 local function equippedId(): string?
@@ -303,16 +371,13 @@ local function renderGrid()
 	local query = string.lower(searchBox.Text)
 	local visible: { string } = {}
 	for _, weaponId in owned do
-		if query == "" or string.find(string.lower(displayName(weaponId)), query, 1, true) then
+		local matchesFilter = filterClass == nil or classOf(weaponId) == filterClass
+		local matchesSearch = query == "" or string.find(string.lower(displayName(weaponId)), query, 1, true)
+		if matchesFilter and matchesSearch then
 			table.insert(visible, weaponId)
 		end
 	end
-	table.sort(visible, function(a, b)
-		if sortAscending then
-			return displayName(a) < displayName(b)
-		end
-		return displayName(a) > displayName(b)
-	end)
+	table.sort(visible, SORTS[sortIndex].Less)
 
 	-- whole rows only: show visibleRows rows starting at scrollRow
 	local totalRows = math.max(1, math.ceil(#visible / COLUMNS))
@@ -341,7 +406,8 @@ local function renderGrid()
 	end
 
 	footer.HeldCount.Text = string.format("%d/%d", #owned, #slots)
-	footer.SortButton.Text = if sortAscending then "Sort: A-Z" else "Sort: Z-A"
+	emptyLabel.Visible = #visible == 0
+	updateToolbar()
 end
 
 -- square cells that fill the grid width (COLUMNS per row); show only the rows that fit completely
@@ -432,9 +498,122 @@ card:WaitForChild("EquipButton").MouseButton1Click:Connect(function()
 	end
 end)
 
-footer:WaitForChild("SortButton").MouseButton1Click:Connect(function()
-	sortAscending = not sortAscending
-	renderGrid()
+--------------------------------------------------------------------------- Filter / Sort dropdowns
+
+local MENU_Z = 40 -- above everything in the panel (the Main Menu Gui uses ZIndexBehavior.Global)
+local menuFrame: Frame? = nil
+local menuBlocker: TextButton? = nil
+
+local function closeMenu()
+	if menuFrame then
+		menuFrame:Destroy()
+		menuFrame = nil
+	end
+	if menuBlocker then
+		menuBlocker:Destroy()
+		menuBlocker = nil
+	end
+end
+
+-- Drops a small list under `owner`. A transparent full-panel button behind it closes the menu on any outside click.
+local function openMenu(owner: GuiObject, labels: { string }, currentIndex: number, onPick: (number) -> ())
+	closeMenu()
+
+	local blocker = Instance.new("TextButton")
+	blocker.Name = "DropdownBlocker"
+	blocker.BackgroundTransparency = 1
+	blocker.Text = ""
+	blocker.AutoButtonColor = false
+	blocker.Size = UDim2.fromScale(1, 1)
+	blocker.ZIndex = MENU_Z - 1
+	blocker.MouseButton1Click:Connect(closeMenu)
+	blocker.Parent = panel
+	menuBlocker = blocker
+
+	local panelSize = panel.AbsoluteSize
+	local rel = owner.AbsolutePosition - panel.AbsolutePosition
+	local menu = Instance.new("Frame")
+	menu.Name = "DropdownMenu"
+	menu.BackgroundColor3 = Color3.fromRGB(26, 29, 34)
+	menu.BorderSizePixel = 0
+	menu.ZIndex = MENU_Z
+	menu.Position = UDim2.fromScale(rel.X / panelSize.X, (rel.Y + owner.AbsoluteSize.Y + 2) / panelSize.Y)
+	menu.Size = UDim2.fromScale(owner.AbsoluteSize.X / panelSize.X, owner.AbsoluteSize.Y * #labels / panelSize.Y)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(70, 78, 90)
+	stroke.Thickness = 1
+	stroke.Parent = menu
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = menu
+
+	for index, label in labels do
+		local row = Instance.new("TextButton")
+		row.Name = "Option" .. index
+		row.LayoutOrder = index
+		row.Size = UDim2.fromScale(1, 1 / #labels)
+		row.BackgroundColor3 = Color3.fromRGB(34, 38, 45)
+		row.BorderSizePixel = 0
+		row.AutoButtonColor = false
+		row.Font = Enum.Font.GothamMedium
+		row.Text = label
+		row.TextColor3 = if index == currentIndex then TEAL else TEXT
+		row.TextScaled = true
+		row.ZIndex = MENU_Z + 1
+		local limit = Instance.new("UITextSizeConstraint")
+		limit.MaxTextSize = 13
+		limit.MinTextSize = 4
+		limit.Parent = row
+		local pad = Instance.new("UIPadding")
+		pad.PaddingTop = UDim.new(0.2, 0)
+		pad.PaddingBottom = UDim.new(0.2, 0)
+		pad.Parent = row
+		row.MouseButton1Click:Connect(function()
+			closeMenu()
+			onPick(index)
+		end)
+		row.Parent = menu
+	end
+	menu.Parent = panel
+	menuFrame = menu
+end
+
+filterButton.MouseButton1Click:Connect(function()
+	-- one entry per weapon class that exists in the game, plus "All"
+	local classes: { string } = {}
+	for _, definition in WeaponRegistry.GetAll() do
+		if not table.find(classes, definition.Class) then
+			table.insert(classes, definition.Class)
+		end
+	end
+	table.sort(classes)
+
+	local labels = { "All" }
+	local values: { string? } = { nil }
+	local current = 1
+	for _, className in classes do
+		table.insert(labels, classLabel(className))
+		values[#labels] = className
+		if className == filterClass then
+			current = #labels
+		end
+	end
+	openMenu(filterButton, labels, current, function(index)
+		filterClass = values[index]
+		scrollRow = 0
+		renderGrid()
+	end)
+end)
+
+sortButton.MouseButton1Click:Connect(function()
+	local labels = {}
+	for _, entry in SORTS do
+		table.insert(labels, entry.Label)
+	end
+	openMenu(sortButton, labels, sortIndex, function(index)
+		sortIndex = index
+		renderGrid()
+	end)
 end)
 
 InventoryChanged.OnClientEvent:Connect(applySnapshot)
@@ -454,6 +633,7 @@ end)
 
 -- while the panel is open, keep HP / Stamina live
 panel:GetPropertyChangedSignal("Visible"):Connect(function()
+	closeMenu()
 	if not panel.Visible then
 		return
 	end
@@ -489,3 +669,4 @@ end
 fitCells()
 refresh()
 task.spawn(fetch)
+

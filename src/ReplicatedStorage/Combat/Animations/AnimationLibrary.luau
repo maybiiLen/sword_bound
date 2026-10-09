@@ -4,14 +4,16 @@
 	from Animations.Specs so gameplay code never hard-codes seconds.
 
 	Id resolution:
-		1. Published[name] if set (the real asset; required for live servers).
-		2. In Studio only: registers Combat.Assets.AnimSaves[name] (the KeyframeSequence made by
-		   AnimationBuilder) with KeyframeSequenceProvider for a temporary id, so playtests work
-		   before publishing.
+		1. In Studio: registers Combat.Assets.AnimSaves[name] (the KeyframeSequence made by
+		   AnimationBuilder) with KeyframeSequenceProvider for a temporary id, so playtests always
+		   show the latest specs even before they are published (2026-10-09; was Published first).
+		2. Published[name] (the real asset). Live servers only ever use this.
 		3. R6 rigs use R6Fallback (old Roblox clips), since the specs are R15.
 
-	Publishing: right-click Combat.Assets.AnimSaves.<Name> > Save to Roblox (upload under the group
-	that owns the game), then paste "rbxassetid://<id>" into Published below.
+	Publishing (2026-10-09): after AnimationBuilder.Build, run AnimationBuilder.Publish() in Edit
+	mode. It uploads every AnimSaves sequence under the game's owner with AssetService:CreateAssetAsync
+	(Studio beta "CreateAssetAsync Luau API") and rewrites the Published table below. Re-publish
+	after changing Specs, or live servers keep the old motion (timing comes from Specs either way).
 
 	API:
 		AnimationLibrary.GetId(name, isR6?) -> string?
@@ -34,30 +36,30 @@ local Specs = require(script.Parent.Specs)
 local AnimSaves = script.Parent.Parent:WaitForChild("Assets"):WaitForChild("AnimSaves")
 
 local Published: { [string]: string } = {
-	GuardIdle = "",
-	Light1 = "",
-	Light2 = "",
-	Light3 = "",
-	HeavyCharge = "",
-	HeavyRelease = "",
-	Roll = "",
-	RollBack = "",
-	RollLeft = "",
-	RollRight = "",
-	Backstep = "",
-	BlockIdle = "",
-	BlockImpact = "",
-	Parry = "",
-	GuardBreak = "",
-	Stagger = "",
-	Flinch = "",
-	KnightSlash = "",
-	KnightDelayedChop = "",
-	Riposte = "",
-	RunningAttack = "",
-	JumpAttack = "",
-	RollAttack = "",
-	GuardCounter = "",
+	GuardIdle = "rbxassetid://76156419807512",
+	Light1 = "rbxassetid://118521926098525",
+	Light2 = "rbxassetid://91571374911310",
+	Light3 = "rbxassetid://87737377591654",
+	HeavyCharge = "rbxassetid://84978437485643",
+	HeavyRelease = "rbxassetid://117395812746503",
+	Roll = "rbxassetid://76616959526726",
+	RollBack = "rbxassetid://72839601368787",
+	RollLeft = "rbxassetid://91625551452404",
+	RollRight = "rbxassetid://133544447127746",
+	Backstep = "rbxassetid://103402558213584",
+	BlockIdle = "rbxassetid://139174041670347",
+	BlockImpact = "rbxassetid://88345161469224",
+	Parry = "rbxassetid://137527166509782",
+	GuardBreak = "rbxassetid://100319818244103",
+	Stagger = "rbxassetid://129734116711900",
+	Flinch = "rbxassetid://95301812421689",
+	KnightSlash = "rbxassetid://81609063552215",
+	KnightDelayedChop = "rbxassetid://133345999298989",
+	Riposte = "rbxassetid://94029878337343",
+	RunningAttack = "rbxassetid://81069293645429",
+	JumpAttack = "rbxassetid://102791533636133",
+	RollAttack = "rbxassetid://97355777767507",
+	GuardCounter = "rbxassetid://98806102879600",
 }
 
 local R6Fallback: { [string]: string } = {
@@ -88,10 +90,6 @@ function AnimationLibrary.GetId(name: string, isR6: boolean?): string?
 	if isR6 then
 		return R6Fallback[name]
 	end
-	local published = Published[name]
-	if published and published ~= "" then
-		return published
-	end
 	if registered[name] then
 		return registered[name]
 	end
@@ -104,6 +102,10 @@ function AnimationLibrary.GetId(name: string, isR6: boolean?): string?
 				return id
 			end
 		end
+	end
+	local published = Published[name]
+	if published and published ~= "" then
+		return published
 	end
 	if not warned[name] then
 		warned[name] = true
@@ -160,3 +162,4 @@ function AnimationLibrary.IsLooped(name: string): boolean
 end
 
 return AnimationLibrary
+

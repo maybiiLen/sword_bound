@@ -15,6 +15,7 @@ Everything under `Claude/` is written by Claude, kept separate from Henry's own 
 - [[Phase 0 shared combat systems]] (done 2026-10-08)
 - [[Weapon models and effects plan]] (draft, 2026-10-08)
 - [[Weapons and effects production]] (round 1 done, 2026-10-08)
+- [[Sword combat feel revision]] (building, 2026-10-08)
 - [[Core fighting plan]]
 - [[Floor 1 build list]]
 
@@ -35,6 +36,10 @@ Research
 - [[Mesh and texture pipeline for Claude (2026-10-08)]]
 - [[VFX artist workflow and cookbook (2026-10-08)]]
 - [[Combat animator workflow research (2026-10-08)]]
+- [[Roblox sword combat feel research (2026-10-08)]]
+- [[Action game attack assist and cadence research (2026-10-08)]]
+- [[Roblox attack movement implementation research (2026-10-08)]]
+- [[Sword moveset and animation readability research (2026-10-08)]]
 
 Systems and workflow
 - [[Repo sync and commits]]

@@ -64,6 +64,7 @@
 	See Docs.Combat > "Server validation".
 ]]
 
+local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -544,6 +545,44 @@ local function getTargetPosition(model: Model): Vector3
 	return if root and root:IsA("BasePart") then root.Position else model:GetPivot().Position
 end
 
+-- Push a non-player target `studs` away from the attacker over CombatConfig.KnockbackTime (combo
+-- finishers, attack.Knockback). Players are never pushed by the server: their client owns their
+-- physics, so a server mover would fight it (and PvP is off).
+local function applyKnockback(target: Model, attackerRoot: BasePart, studs: number)
+	if Players:GetPlayerFromCharacter(target) then
+		return
+	end
+	local targetRoot = target:FindFirstChild("HumanoidRootPart")
+	if not targetRoot or not targetRoot:IsA("BasePart") or targetRoot.Anchored then
+		return
+	end
+	local offset = targetRoot.Position - attackerRoot.Position
+	local flatOffset = Vector3.new(offset.X, 0, offset.Z)
+	if flatOffset.Magnitude < 1e-3 then
+		return
+	end
+	local duration = CombatConfig.KnockbackTime
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "KnockbackAttachment"
+	attachment.Parent = targetRoot
+	local mover = Instance.new("LinearVelocity")
+	mover.Name = "Knockback"
+	mover.Attachment0 = attachment
+	mover.RelativeTo = Enum.ActuatorRelativeTo.World
+	mover.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
+	mover.PrimaryTangentAxis = Vector3.xAxis
+	mover.SecondaryTangentAxis = Vector3.zAxis
+	mover.MaxForce = 1e5
+	local direction = flatOffset.Unit
+	local speed = studs / duration
+	mover.PlaneVelocity = Vector2.new(direction.X, direction.Z) * speed
+	mover.Parent = targetRoot
+	Debris:AddItem(mover, duration)
+	Debris:AddItem(attachment, duration)
+end
+
+local resolveHit -- defined after onHit
+
 local function onHit(player: Player, target: unknown, position: unknown)
 	local actor = actors[player]
 	local character = player.Character
@@ -574,7 +613,13 @@ local function onHit(player: Player, target: unknown, position: unknown)
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local targetPosition = getTargetPosition(target)
 	local distance = root and (root.Position - targetPosition).Magnitude or math.huge
-	if distance > definition.Reach + CombatConfig.ReachTolerance then
+	local reach = definition.Reach + CombatConfig.ReachTolerance
+	-- the attack's warp moved the attacker up to WarpOf(attack) studs just before the hit, and the
+	-- server sees that movement ~0.2 s late. A hit inside that extra allowance is not trusted yet:
+	-- it is measured again WarpReachRecheck later, when the warp has replicated, and must then be
+	-- inside the normal reach (so standing still and firing from far away still fails).
+	local warpReach = reach + CombatRules.WarpOf(action.attack)
+	if distance > warpReach then
 		CombatService.HitRejected:Fire(player, string.format("out of reach (%.1f studs)", distance))
 		return
 	end
@@ -582,7 +627,28 @@ local function onHit(player: Player, target: unknown, position: unknown)
 		return
 	end
 	action.hit[target] = true
+	if distance > reach then
+		task.delay(CombatConfig.WarpReachRecheck, function()
+			local laterRoot = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if not laterRoot or not target:IsDescendantOf(workspace) or humanoid.Health <= 0 then
+				return
+			end
+			local laterDistance = (laterRoot.Position - getTargetPosition(target)).Magnitude
+			if laterDistance > reach then
+				CombatService.HitRejected:Fire(player, string.format("out of reach after warp (%.1f studs)", laterDistance))
+				return
+			end
+			resolveHit(player, action, target, humanoid, laterRoot, position)
+		end)
+		return
+	end
+	resolveHit(player, action, target, humanoid, root, position)
+end
 
+-- Damage, knockback and HitConfirmed for a hit that passed validation.
+function resolveHit(player: Player, action: Action, target: Model, humanoid: Humanoid, root: BasePart?, position: unknown)
+	local definition = action.definition
+	local targetPosition = getTargetPosition(target)
 	local attack = action.attack
 	local damage = definition.Damage * attack.DamageMultiplier
 	local poise = attack.PoiseDamage or 0
@@ -608,6 +674,11 @@ local function onHit(player: Player, target: unknown, position: unknown)
 		GuardDamage = definition.GuardDamage,
 		Weight = attack.Weight,
 	})
+	-- no knockback on a staggered target: it would push a riposte-able enemy out of riposte range
+	local clean = result == "Hit" or result == "Crit"
+	if clean and (attack.Knockback or 0) > 0 and root and not PoiseService:IsStaggered(target) then
+		applyKnockback(target, root, attack.Knockback)
+	end
 	CombatService.HitConfirmed:Fire(player, target, result, dealt)
 end
 

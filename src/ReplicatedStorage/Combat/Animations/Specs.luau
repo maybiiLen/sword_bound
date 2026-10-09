@@ -32,7 +32,7 @@
 		Legs       { RightHip, RightKnee, LeftHip, LeftKnee }  direct angles instead of Feet
 
 	After editing: run AnimationBuilder (see Docs.Combat > "Animation pipeline"), playtest, then
-	publish the KeyframeSequences and paste the ids into AnimationLibrary.Published.
+	publish with AnimationBuilder.Publish() (fills AnimationLibrary.Published for live servers).
 ]]
 
 local V = Vector3.new
@@ -746,68 +746,60 @@ Specs.Riposte = {
 -- Contextual attacks (2026-10-01). Same recipe as the light combo: coil, hips fire, blade crosses
 -- on a Linear key, Out-eased end, overshoot, slow settle. Timings are judgment calls (unsourced).
 
--- RunningAttack: sprint into a deep, leaning forehand slash with a long step (lunge 2.2).
+-- RunningAttack: sprint into a lunging one-arm thrust (see the spec's comment).
 Specs.RunningAttack = {
+	-- 2026-10-08: rebuilt as its own move. It used to be a leaning copy of Light1's forehand, so it
+	-- read as a normal slash. Now it is the kit's only straight-line attack: the sprint carries into
+	-- a deep lean, the sword arm drives fully out (inspired by DMC's Stinger and SAO's Rage Spike
+	-- line), the pose is held while the warp carries you up to 8 studs, then a skid recovery.
+	-- Poses and timing are judgment (unsourced); see "Sword combat feel revision" in the vault.
 	Priority = "Action3",
 	Loop = false,
 	Keyframes = {
-		{ T = 0, Pose = with(STANCE, { -- running lean, coiled right
-			Root = { Pos = V(0, -0.4, 0), Rot = V(0, -20, 0) },
-			Waist = V(-10, -40, 0),
-			RightHand = { Pos = V(1.35, 0.35, 0.5), Blade = V(0.4, 0.5, 0.75), Pole = V(1, -0.2, 0.6) },
-			LeftArm = { Shoulder = V(50, 0, -30), Elbow = V(60, 0, 0) },
-			Feet = stepFeet(-0.6, 0.6),
-		}), Ease = "Out" },
-		{ T = 0.1, Pose = with(STANCE, { -- coil peak, lead foot lifts
-			Root = { Pos = V(0, -0.45, 0.1), Rot = V(0, -24, 0) },
-			Waist = V(-8, -48, 0),
-			RightHand = { Pos = V(1.45, 0.5, 0.55), Blade = V(0.4, 0.5, 0.75), Pole = V(1, -0.2, 0.6) },
-			LeftArm = { Shoulder = V(55, 0, -30), Elbow = V(60, 0, 0) },
-			Feet = stepFeet(-1.0, 0.6, 0.3, 0),
+		{ T = 0, Pose = with(STANCE, { -- running lean, blade drawn back at the hip, point forward
+			Root = { Pos = V(0, -0.5, 0.1), Rot = V(0, -15, 0) },
+			Waist = V(-15, -30, 0),
+			RightHand = { Pos = V(0.95, -0.3, 0.6), Blade = V(0.05, 0.3, -1), Pole = V(1, -0.5, 0.3) },
+			LeftArm = { Shoulder = V(55, 0, -20), Elbow = V(60, 0, 0) },
+			Feet = stepFeet(-0.8, 0.8),
 		}), Ease = "In" },
-		{ T = 0.16, Pose = with(STANCE, { -- hips fire, long step
-			Root = { Pos = V(0, -0.7, -0.1), Rot = V(0, 4, 0) },
-			Waist = V(-14, -30, 0),
-			RightHand = { Pos = V(1.3, 0.35, 0), Blade = V(0.5, 0.35, 0.75), Pole = V(1, -0.2, 0.5) },
-			LeftArm = { Shoulder = V(35, 0, -32), Elbow = V(50, 0, 0) },
-			Feet = stepFeet(-1.5, 1.2),
-		}), Ease = "Linear" },
-		{ T = 0.22, Pose = with(STANCE, { -- contact, low and leaning in
-			Root = { Pos = V(0, -0.85, -0.2), Rot = V(0, 14, 0) },
-			Waist = V(-22, -2, 0),
-			RightHand = { Pos = V(0.5, -0.25, -1.45), Blade = V(0.1, 0, -1) },
-			LeftArm = { Shoulder = V(15, 0, -40), Elbow = V(40, 0, 0) },
-			Feet = stepFeet(-1.2, 1.7),
+		{ T = 0.1, Pose = with(STANCE, { -- coil: drop low, hand pulls further back, lead foot lifts
+			Root = { Pos = V(0, -0.72, 0.15), Rot = V(0, -22, 0) },
+			Waist = V(-22, -38, 0),
+			-- torso-space blade tilted up by the lean so it stays level in the world
+			RightHand = { Pos = V(1.0, -0.1, 0.75), Blade = V(0.05, 0.42, -0.9), Pole = V(1, -0.5, 0.3) },
+			LeftArm = { Shoulder = V(70, 0, -15), Elbow = V(40, 0, 0) },
+			Feet = stepFeet(-1.2, 0.9, 0.3, 0),
+		}), Ease = "In" },
+		{ T = 0.2, Pose = with(STANCE, { -- thrust home: full extension, deep lean, long stance
+			Root = { Pos = V(0, -0.95, -0.35), Rot = V(0, 18, 0) },
+			Waist = V(-38, 20, 0),
+			RightHand = { Pos = V(0.35, 1.15, -1.65), Blade = V(0, 0.68, -0.73), Pole = V(1, -0.3, 0.2) },
+			LeftArm = { Shoulder = V(-25, 0, -55), Elbow = V(15, 0, 0) },
+			Feet = stepFeet(-2.0, 2.0),
 		}), Ease = "Out" },
-		{ T = 0.3, Pose = with(STANCE, { -- end of the cut
-			Root = { Pos = V(0, -0.85, -0.2), Rot = V(0, 20, 0) },
-			Waist = V(-22, 42, 0),
-			RightHand = { Pos = V(-0.5, -0.8, -0.9), Blade = V(-0.9, -0.4, -0.3), Pole = V(0.4, -1, 0.2) },
-			LeftArm = { Shoulder = V(0, 0, -50), Elbow = V(30, 0, 0) },
-			Feet = stepFeet(-1.1, 1.8),
-		}), Ease = "Out" },
-		{ T = 0.45, Pose = with(STANCE, { -- follow-through skid
-			Root = { Pos = V(0, -0.8, -0.15), Rot = V(0, 22, 0) },
-			Waist = V(-18, 48, 0),
-			RightHand = { Pos = V(-0.65, -0.9, -0.7), Blade = V(-0.8, -0.5, 0.2), Pole = V(0.4, -1, 0.2) },
-			LeftArm = { Shoulder = V(0, 0, -52), Elbow = V(30, 0, 0) },
-			Feet = stepFeet(-1.1, 1.8),
+		{ T = 0.36, Pose = with(STANCE, { -- hold the line while the warp carries you
+			Root = { Pos = V(0, -0.95, -0.38), Rot = V(0, 20, 0) },
+			Waist = V(-36, 22, 0),
+			RightHand = { Pos = V(0.35, 1.1, -1.62), Blade = V(0, 0.65, -0.76), Pole = V(1, -0.3, 0.2) },
+			LeftArm = { Shoulder = V(-25, 0, -55), Elbow = V(15, 0, 0) },
+			Feet = stepFeet(-2.0, 2.1),
 		}), Ease = "InOut" },
-		{ T = 0.8, Pose = with(STANCE, { -- recover, rear foot drags in
-			Root = { Pos = V(0, -0.45, 0), Rot = V(0, 8, 0) },
-			Waist = V(-8, 18, 0),
-			RightHand = { Pos = V(0.15, -0.8, -1.0), Blade = V(-0.45, 0.35, -0.8) },
-			LeftArm = { Shoulder = V(10, 0, -25), Elbow = V(25, 0, 0) },
-			Feet = stepFeet(-0.6, 1.0, 0, 0.16),
+		{ T = 0.55, Pose = with(STANCE, { -- skid: blade comes back up, weight rocks back
+			Root = { Pos = V(0, -0.7, -0.15), Rot = V(0, 8, 0) },
+			Waist = V(-18, 8, 0),
+			RightHand = { Pos = V(0.6, -0.4, -1.3), Blade = V(-0.1, 0.4, -0.9) },
+			LeftArm = { Shoulder = V(20, 0, -30), Elbow = V(30, 0, 0) },
+			Feet = stepFeet(-1.6, 1.6),
 		}), Ease = "InOut" },
-		{ T = 1.0, Pose = with(GUARD, {
-			Root = { Pos = V(0, -0.33, 0), Rot = V(0, 3, 0) },
-			Waist = V(-5, 6, 0),
-			Feet = stepFeet(-0.56, 0.55),
+		{ T = 0.85, Pose = with(GUARD, { -- recover, rear foot drags in
+			Root = { Pos = V(0, -0.4, 0), Rot = V(0, 4, 0) },
+			Waist = V(-6, 4, 0),
+			Feet = stepFeet(-0.7, 0.9, 0, 0.14),
 		}), Ease = "InOut" },
-		{ T = 1.25, Pose = GUARD },
+		{ T = 1.05, Pose = GUARD },
 	},
-	Markers = { Lunge = 0.08, HitStart = 0.18, HitEnd = 0.32, CancelOpen = 0.62, RollOpen = 0.68, MoveOpen = 0.85 },
+	Markers = { Lunge = 0.04, HitStart = 0.2, HitEnd = 0.36, CancelOpen = 0.6, RollOpen = 0.64, MoveOpen = 0.8 },
 }
 
 -- JumpAttack: blade high in the air, legs tucked, chop down as the Plunge (on the Lunge marker)
@@ -871,43 +863,61 @@ Specs.JumpAttack = {
 	Markers = { Lunge = 0.18, HitStart = 0.24, HitEnd = 0.4, CancelOpen = 0.78, RollOpen = 0.82, MoveOpen = 0.98 },
 }
 
--- RollAttack: out of the roll's crouch, a quick rising thrust (fast HitStart, small commitment).
+-- RollAttack: out of the roll's crouch, a low rising slash (fast HitStart, small commitment).
 Specs.RollAttack = {
+	-- 2026-10-08: rebuilt as a low rising slash. It used to be a rising thrust, which now belongs to
+	-- the running attack. Out of the roll's crouch, the blade trails low on the right and rips up
+	-- across the body to high left: the only attack that starts near the ground. Poses and timing
+	-- are judgment (unsourced); see "Sword combat feel revision" in the vault.
 	Priority = "Action3",
 	Loop = false,
 	Keyframes = {
-		{ T = 0, Pose = with(STANCE, { -- crouched, blade low at the hip pointing forward
-			Root = { Pos = V(0, -0.9, 0.1), Rot = V(0, -10, 0) },
-			Waist = V(-20, -15, 0),
-			RightHand = { Pos = V(0.8, -0.6, 0.2), Blade = V(0.05, 0.15, -1), Pole = V(1, -0.5, 0.3) },
-			LeftArm = { Shoulder = V(40, 0, -20), Elbow = V(60, 0, 0) },
-			Feet = stepFeet(-0.7, 0.8),
-		}), Ease = "Out" },
-		{ T = 0.08, Pose = with(STANCE, { -- draw back, lead foot lifts
-			Root = { Pos = V(0, -0.85, 0.15), Rot = V(0, -18, 0) },
-			Waist = V(-12, -30, 0),
-			RightHand = { Pos = V(0.95, -0.4, 0.55), Blade = V(0.05, 0.15, -1), Pole = V(1, -0.5, 0.3) },
-			LeftArm = { Shoulder = V(50, 0, -20), Elbow = V(70, 0, 0) },
-			Feet = stepFeet(-0.95, 0.7, 0.2, 0),
+		{ T = 0, Pose = with(STANCE, { -- crouched out of the roll, blade trailing low right
+			Root = { Pos = V(0, -1.0, 0.1), Rot = V(0, -20, 0) },
+			Waist = V(-22, -30, 0),
+			RightHand = { Pos = V(1.1, -1.1, 0.4), Blade = V(0.3, -0.5, 0.8), Pole = V(1, -0.3, 0.4) },
+			LeftArm = { Shoulder = V(40, 0, -25), Elbow = V(50, 0, 0) },
+			Feet = stepFeet(-0.8, 0.9),
 		}), Ease = "In" },
-		{ T = 0.16, Pose = with(STANCE, { -- thrust, rising out of the crouch
-			Root = { Pos = V(0, -0.6, -0.2), Rot = V(0, 10, 0) },
-			Waist = V(-16, 6, 0),
-			RightHand = { Pos = V(0.35, 0.05, -1.8), Blade = V(0, 0.12, -1), Pole = V(1, -0.3, 0.2) },
-			LeftArm = { Shoulder = V(30, 0, -45), Elbow = V(30, 0, 0) },
+		{ T = 0.07, Pose = with(STANCE, { -- coil lower, lead foot lifts
+			Root = { Pos = V(0, -1.05, 0.12), Rot = V(0, -26, 0) },
+			Waist = V(-24, -38, 0),
+			RightHand = { Pos = V(1.2, -1.2, 0.55), Blade = V(0.35, -0.45, 0.8), Pole = V(1, -0.3, 0.4) },
+			LeftArm = { Shoulder = V(45, 0, -25), Elbow = V(55, 0, 0) },
+			Feet = stepFeet(-1.0, 0.9, 0.22, 0),
+		}), Ease = "In" },
+		{ T = 0.12, Pose = with(STANCE, { -- hips fire, rising, blade swings forward low
+			Root = { Pos = V(0, -0.8, -0.05), Rot = V(0, -4, 0) },
+			Waist = V(-14, -15, 0),
+			RightHand = { Pos = V(0.9, -0.7, -0.6), Blade = V(0.2, 0.2, -1), Pole = V(1, -0.4, 0.3) },
+			LeftArm = { Shoulder = V(30, 0, -35), Elbow = V(40, 0, 0) },
 			Feet = stepFeet(-1.3, 1.1),
+		}), Ease = "Linear" },
+		{ T = 0.17, Pose = with(STANCE, { -- contact: blade rising through the front
+			Root = { Pos = V(0, -0.5, -0.15), Rot = V(0, 10, 0) },
+			Waist = V(-6, 10, 0),
+			RightHand = { Pos = V(0.2, 0.3, -1.4), Blade = V(-0.25, 0.9, -0.35), Pole = V(1, -0.2, 0.3) },
+			LeftArm = { Shoulder = V(20, 0, -40), Elbow = V(35, 0, 0) },
+			Feet = stepFeet(-1.3, 1.3),
 		}), Ease = "Out" },
-		{ T = 0.3, Pose = with(STANCE, { -- extended
-			Root = { Pos = V(0, -0.62, -0.22), Rot = V(0, 12, 0) },
-			Waist = V(-18, 8, 0),
-			RightHand = { Pos = V(0.35, 0.1, -1.75), Blade = V(0, 0.15, -1), Pole = V(1, -0.3, 0.2) },
-			LeftArm = { Shoulder = V(30, 0, -45), Elbow = V(30, 0, 0) },
-			Feet = stepFeet(-1.25, 1.15),
+		{ T = 0.25, Pose = with(STANCE, { -- end high left, standing tall
+			Root = { Pos = V(0, -0.3, -0.1), Rot = V(0, 18, 0) },
+			Waist = V(4, 30, 0),
+			RightHand = { Pos = V(-0.6, 1.3, -0.6), Blade = V(-0.6, 0.7, 0.35), Pole = V(0.5, 0.2, -1) },
+			LeftArm = { Shoulder = V(0, 0, -50), Elbow = V(25, 0, 0) },
+			Feet = stepFeet(-1.2, 1.35),
+		}), Ease = "Out" },
+		{ T = 0.38, Pose = with(STANCE, { -- overshoot hold
+			Root = { Pos = V(0, -0.28, -0.08), Rot = V(0, 20, 0) },
+			Waist = V(5, 34, 0),
+			RightHand = { Pos = V(-0.7, 1.4, -0.4), Blade = V(-0.6, 0.75, 0.3), Pole = V(0.5, 0.2, -1) },
+			LeftArm = { Shoulder = V(0, 0, -52), Elbow = V(25, 0, 0) },
+			Feet = stepFeet(-1.2, 1.35),
 		}), Ease = "InOut" },
-		{ T = 0.6, Pose = with(STANCE, { -- recover, rear foot drags in
-			Root = { Pos = V(0, -0.42, 0), Rot = V(0, 4, 0) },
-			Waist = V(-6, 8, 0),
-			RightHand = { Pos = V(0.4, -0.6, -1.1), Blade = V(-0.3, 0.45, -0.8) },
+		{ T = 0.62, Pose = with(STANCE, { -- recover, blade comes down to guard, rear foot drags in
+			Root = { Pos = V(0, -0.4, 0), Rot = V(0, 6, 0) },
+			Waist = V(-6, 10, 0),
+			RightHand = { Pos = V(0.3, -0.4, -1.1), Blade = V(-0.3, 0.5, -0.8) },
 			LeftArm = { Shoulder = V(15, 0, -25), Elbow = V(25, 0, 0) },
 			Feet = stepFeet(-0.6, 0.9, 0, 0.14),
 		}), Ease = "InOut" },
@@ -918,7 +928,7 @@ Specs.RollAttack = {
 		}), Ease = "InOut" },
 		{ T = 1.0, Pose = GUARD },
 	},
-	Markers = { Lunge = 0.06, HitStart = 0.13, HitEnd = 0.24, CancelOpen = 0.42, RollOpen = 0.48, MoveOpen = 0.62 },
+	Markers = { Lunge = 0.05, HitStart = 0.11, HitEnd = 0.24, CancelOpen = 0.42, RollOpen = 0.48, MoveOpen = 0.62 },
 }
 
 -- GuardCounter: out of the block, drop the blade low left and cut up across to high right.
@@ -979,4 +989,39 @@ Specs.GuardCounter = {
 	Markers = { Lunge = 0.06, HitStart = 0.15, HitEnd = 0.3, CancelOpen = 0.6, RollOpen = 0.66, MoveOpen = 0.82 },
 }
 
+-- Timing pass (2026-10-08, "Sword combat feel revision" in the vault). The first light hit landed at
+-- 0.26 s, slower than Genshin sword openers (Keqing 0.17 s, Kaeya 0.23 s, KQM library) and slow for
+-- Roblox M1s, while the hit-to-hit pace was fine. The lights now land at ~0.19 s and chain every
+-- ~0.42 s; the finisher lands at ~0.27 s. Instead of re-keying every pose, keyframe and marker
+-- times go through a piecewise linear map ({ old, new } anchors); times after the last anchor
+-- shift by the same amount as the last anchor.
+local function retime(spec: { [string]: any }, anchors: { { number } })
+	local function map(t: number): number
+		for i = 2, #anchors do
+			local a = anchors[i - 1]
+			local b = anchors[i]
+			if t <= b[1] then
+				local f = (t - a[1]) / (b[1] - a[1])
+				return math.round((a[2] + (b[2] - a[2]) * f) * 1000) / 1000
+			end
+		end
+		local last = anchors[#anchors]
+		return math.round((t + last[2] - last[1]) * 1000) / 1000
+	end
+	for _, keyframe in spec.Keyframes do
+		keyframe.T = map(keyframe.T)
+	end
+	local markers = {}
+	for name, t in spec.Markers do
+		markers[name] = map(t)
+	end
+	spec.Markers = markers
+end
+
+local LIGHT_TIMING = { { 0, 0 }, { 0.26, 0.19 }, { 0.38, 0.29 }, { 0.5, 0.42 }, { 0.72, 0.62 } }
+retime(Specs.Light1, LIGHT_TIMING)
+retime(Specs.Light2, LIGHT_TIMING)
+retime(Specs.Light3, { { 0, 0 }, { 0.34, 0.27 }, { 0.46, 0.37 }, { 0.64, 0.54 }, { 0.95, 0.8 } })
+
 return Specs
+

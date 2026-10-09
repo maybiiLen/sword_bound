@@ -22,8 +22,9 @@
 		  GuardCounter (within GuardCounterWindow of blocking/parrying a hit), JumpAttack (in the
 		  air; Plunge slams you down), RollAttack (out of a roll/backstep or RollAttackWindow
 		  after it), RunningAttack (sprinting at RunningAttackMinSpeed). Never mid light combo.
-		- attacks keep your momentum (MomentumCarryTime), lunge toward a target in range and
-		  stop short of it (LungeAssistRange / LungeStopDistance), and stop the lunge on a hit;
+		- attacks keep your momentum (MomentumCarryTime), aim at the best enemy in front even
+		  without lock-on (findAttackTarget, SoftTurnRate), warp toward it from the Lunge marker and
+		  stop at blade range (CombatRules.WarpDistance, MovementController:Warp), and stop on a hit;
 		  Light1 out of a sprint lunges further (SprintAttackLungeMultiplier)
 		- inputs during an action are buffered for InputBufferTime and fire as soon as their
 		  window opens (the newest press replaces an older one)
@@ -66,6 +67,7 @@ local WeaponRegistry = require(Combat.WeaponRegistry)
 local Effects = require(Combat.Effects)
 local AnimationSet = require(Combat.Animations.AnimationSet)
 local AnimationLibrary = require(Combat.Animations.AnimationLibrary)
+local CombatRules = require(Combat.CombatRules)
 
 local Attr = CombatConfig.Attributes
 local Remotes = Combat.Remotes
@@ -84,7 +86,7 @@ local humanoid: Humanoid? = nil
 local anims = nil
 local weapon = nil
 
-local action: { kind: string, token: number, cancelOpen: boolean, rollOpen: boolean, attack: any?, startedAt: number?, pressId: number? }? = nil
+local action: { kind: string, token: number, cancelOpen: boolean, rollOpen: boolean, attack: any?, startedAt: number?, pressId: number?, aimTarget: BasePart?, aimAngle: number? }? = nil
 local token = 0
 local comboStep = 0
 local lastLightEnd = -math.huge
@@ -236,64 +238,108 @@ local function carryMomentum()
 	end
 end
 
--- What a lunge steers toward: the lock-on target, else the nearest living enemy inside a cone in
--- front of us, within LungeAssistRange.
-local function findLungeTarget(root: BasePart): BasePart?
-	local range = CombatConfig.LungeAssistRange
-	local locked = lockOn.TargetPart
-	if locked and locked.Parent and (locked.Position - root.Position).Magnitude <= range then
-		return locked
+-- Where the player means to attack: the stick/WASD direction while steering, else where the
+-- camera looks (the combat camera sits behind the shoulder), else where the character faces.
+local function aimDirection(): Vector3
+	local input = movement:GetMoveInput()
+	if input.Magnitude > 0 then
+		return input
 	end
+	local currentCamera = workspace.CurrentCamera
+	if currentCamera then
+		local look = currentCamera.CFrame.LookVector
+		local flatLook = Vector3.new(look.X, 0, look.Z)
+		if flatLook.Magnitude > 1e-3 then
+			return flatLook.Unit
+		end
+	end
+	local facing = rootLook()
+	return Vector3.new(facing.X, 0, facing.Z).Unit
+end
+
+-- Which enemy an attack goes for (2026-10-08 attack warp): the lock-on target within
+-- LockedWarpRange, else the best living enemy inside LungeAssistAngle of the aim direction within
+-- SoftTargetRange (or further for long-warp attacks: stop distance + warp + 2, so the running
+-- attack finds targets it can actually reach), scored by angle first and distance second.
+-- Returns the part and its angle off the aim in degrees (0 for the lock-on target).
+local function findAttackTarget(root: BasePart, attack): (BasePart?, number)
+	local locked = lockOn.TargetPart
+	if lockOn.Target and locked and locked.Parent then
+		-- locked on: only ever go for the lock target (the body keeps facing it), and only in range
+		if (locked.Position - root.Position).Magnitude <= CombatConfig.LockedWarpRange then
+			return locked, 0
+		end
+		return nil, 0
+	end
+	local reachable = CombatConfig.WarpStopDistance + CombatRules.WarpOf(attack) + 2
+	local range = math.max(CombatConfig.SoftTargetRange, reachable)
 	local params = OverlapParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = { character }
-	local lookVector = root.CFrame.LookVector
-	local look = Vector3.new(lookVector.X, 0, lookVector.Z).Unit
-	local minDot = math.cos(math.rad(CombatConfig.LungeAssistAngle))
+	local aim = aimDirection()
+	local maxAngle = CombatConfig.LungeAssistAngle
 	local best: BasePart? = nil
-	local bestDistance = math.huge
+	local bestAngle = 0
+	local bestScore = math.huge
 	local seen = {}
 	for _, part in workspace:GetPartBoundsInRadius(root.Position, range, params) do
 		local model = part:FindFirstAncestorOfClass("Model")
 		if model and not seen[model] then
 			seen[model] = true
-			local humanoid = model:FindFirstChildOfClass("Humanoid")
+			local targetHumanoid = model:FindFirstChildOfClass("Humanoid")
 			local targetRoot = model:FindFirstChild("HumanoidRootPart")
-			if humanoid and humanoid.Health > 0 and targetRoot and targetRoot:IsA("BasePart") then
+			-- same rule as LockOnController: other players only count when PvP is on
+			local allowed = CombatConfig.PvPEnabled or Players:GetPlayerFromCharacter(model) == nil
+			if allowed and targetHumanoid and targetHumanoid.Health > 0 and targetRoot and targetRoot:IsA("BasePart") then
 				local offset = targetRoot.Position - root.Position
-				local flat = Vector3.new(offset.X, 0, offset.Z)
-				local distance = flat.Magnitude
-				if distance > 0.1 and distance < bestDistance and look:Dot(flat.Unit) >= minDot then
-					best = targetRoot
-					bestDistance = distance
+				local flatOffset = Vector3.new(offset.X, 0, offset.Z)
+				local distance = flatOffset.Magnitude
+				if distance > 0.1 and distance <= range then
+					local dot = math.clamp(aim:Dot(flatOffset.Unit), -1, 1)
+					local angle = math.deg(math.acos(dot))
+					if angle <= maxAngle then
+						local score = angle / maxAngle + 0.5 * distance / range
+						if score < bestScore then
+							best = targetRoot
+							bestAngle = angle
+							bestScore = score
+						end
+					end
 				end
 			end
 		end
 	end
-	return best
+	return best, bestAngle
 end
 
--- Lunge ~LungeSpeed x scale x LungeTime x 2/3 studs, steered toward a target in range and cut short
--- so we stop LungeStopDistance from it instead of overshooting.
-local function lunge(scale: number)
+-- The attack's Lunge marker. With a target: warp toward it (CombatRules.WarpDistance, re-aimed
+-- every frame until HitStart, stopping at blade range). Without one: the old fixed forward step
+-- (~LungeSpeed x Lunge x LungeTime x 2/3 studs) so a whiff still moves you.
+local function lunge(attack, scale: number, target: BasePart?, angle: number)
 	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root or scale <= 0 then
 		return
 	end
-	local direction = rootLook()
-	local target = findLungeTarget(root)
-	if target then
+	if target and target.Parent then
 		local offset = target.Position - root.Position
-		local flat = Vector3.new(offset.X, 0, offset.Z)
-		local fullDistance = CombatConfig.LungeSpeed * scale * CombatConfig.LungeTime * (2 / 3)
-		local allowed = math.clamp(flat.Magnitude - CombatConfig.LungeStopDistance, 0, fullDistance)
-		if allowed <= 0.05 then
+		local flatOffset = Vector3.new(offset.X, 0, offset.Z)
+		if flatOffset.Magnitude < 1e-3 then
 			return
 		end
-		direction = flat.Unit
-		scale = scale * (allowed / fullDistance)
+		local travel = CombatRules.WarpDistance(flatOffset.Magnitude, angle, CombatRules.WarpOf(attack) * scale)
+		if travel <= 0.05 then
+			return -- already in range: no step, so we don't shove into the target
+		end
+		local lungeAt = AnimationLibrary.MarkerTime(attack.Animation, "Lunge") or 0
+		local hitAt = AnimationLibrary.MarkerTime(attack.Animation, "HitStart") or (lungeAt + 0.15)
+		local duration = math.max(hitAt - lungeAt + 0.06, 0.12)
+		movement:Warp(target, flatOffset.Unit, travel, duration)
+		return
 	end
-	movement:Dash(direction, CombatConfig.LungeSpeed * scale, CombatConfig.LungeTime)
+	local step = attack.Lunge or 0
+	if step > 0 then
+		movement:Dash(rootLook(), CombatConfig.LungeSpeed * step * scale, CombatConfig.LungeTime)
+	end
 end
 
 -- Jump attacks: drive the character straight down so the swing lands with them.
@@ -322,8 +368,20 @@ local function beginAttack(kind: string, attack, chargeRatio: number?, lungeScal
 	carryMomentum()
 	setState("Attacking")
 
+	-- aim: lock-on faces the lock target; otherwise turn toward the soft target at a capped rate
+	-- during the windup; with no target, face the move input / current facing
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local aimTarget: BasePart? = nil
+	local aimAngle = 0
+	if root then
+		aimTarget, aimAngle = findAttackTarget(root, attack)
+	end
+	action.aimTarget = aimTarget
+	action.aimAngle = aimAngle
 	if lockOn.Target then
 		movement:SetFacing(nil)
+	elseif aimTarget then
+		movement:SetFacingTarget(aimTarget, CombatConfig.SoftTurnRate.Windup)
 	else
 		movement:SetFacing(movement:GetIntentDirection())
 	end
@@ -333,8 +391,8 @@ local function beginAttack(kind: string, attack, chargeRatio: number?, lungeScal
 			if myToken ~= token then
 				return
 			end
-			if (attack.Lunge or 0) > 0 then
-				lunge(attack.Lunge * (lungeScale or 1))
+			if (attack.Lunge or 0) > 0 or (attack.Warp or 0) > 0 then
+				lunge(attack, lungeScale or 1, aimTarget, aimAngle)
 			end
 			if (attack.Plunge or 0) > 0 then
 				plunge(attack.Plunge)
@@ -342,12 +400,21 @@ local function beginAttack(kind: string, attack, chargeRatio: number?, lungeScal
 		end,
 		HitStart = function()
 			if myToken == token then
-				movement:SetFacing(rootLook())
+				if aimTarget and not lockOn.Target then
+					movement:SetFacingTarget(aimTarget, CombatConfig.SoftTurnRate.Active) -- slow tracking mid swing
+				else
+					movement:SetFacing(rootLook())
+				end
 				if kind == "Heavy" then
 					camera:Punch(0.6 + (chargeRatio or 0) * 1.2)
 				elseif kind ~= "Light" and attack.Weight == "Heavy" then
 					camera:Punch(0.5) -- heavy contextual attacks (running, jump, guard counter)
 				end
+			end
+		end,
+		HitEnd = function()
+			if myToken == token then
+				movement:SetFacing(rootLook()) -- committed: no more turning after the swing
 			end
 		end,
 		CancelOpen = function()
