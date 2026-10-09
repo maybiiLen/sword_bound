@@ -17,6 +17,7 @@
 		EquippedWeapon  combat     WeaponService
 		Classes         combat     ProgressionService   { [classId] = { Level, XP } }
 		Inventory       inventory  InventoryService     { Weapons = { [weaponId] = true } }  (owned weapons)
+		Growth          growth     GrowthService        { Allocated = { [attrId] = points } }  (Growth Points spent)
 
 	See Docs.PlayerData.
 ]]
@@ -29,4 +30,9 @@ return {
 		-- Weapons the player owns (EquipRemote "Equip" is gated on this). New players start with both.
 		Weapons = { TestSword = true, StarterSword = true },
 	},
+	Growth = {
+		-- Growth Points the player has put into each attribute (attribute value = 1 + points).
+		Allocated = { VIT = 0, END = 0, MND = 0, STR = 0, DEX = 0, AGI = 0, INT = 0 },
+	},
 }
+
