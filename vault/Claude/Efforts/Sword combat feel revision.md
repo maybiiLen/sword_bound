@@ -151,7 +151,7 @@ Acceptance criteria:
 ## Decisions
 
 Henry, 2026-10-08: treat the references as inspiration, not a checklist, and continue the build. Claude picked the open choices:
-- Kept the 3-hit string. Light3 became a real finisher with knockback. A 4th hit can come later.
+- Kept the 3-hit string at first, with Light3 as the finisher. On 2026-10-09 Henry agreed to go to 4 hits (see Round 2).
 - Soft aim is on by default. Lock-on stays optional.
 - Claude writes the showcase animations as procedural specs, checked with the new PosePreview tool.
 
@@ -208,3 +208,38 @@ AnimationLibrary.Published was empty, so the combat animations were only registe
 - Making the next hit come sooner when a hit lands.
 - A new guard counter (shove plus backhand).
 - Sword Skills (Rage Spike and Sonic Leap first), which comes next.
+
+## Round 2: 4-hit string (2026-10-09)
+
+Henry asked whether most games use 5 to 6 hits. The research says 4 to 5 for light and mid weapons, 3 for heavy ones, always ending on a bigger hit that sends the target away:
+- TSB: 4 hits.
+- Deepwoken: 4 swings plus a Flourish.
+- JJS: 4 to 5 hits.
+- Rogue Lineage: 5 for base swords, 4 for katana and rapier, 3 for greatswords.
+- Peroxide: 4 to 6 depending on weapon. This is the only one that reaches 6.
+- Monster Hunter Wilds Sword and Shield: 4 hits.
+- Genshin sword characters: 5 stages.
+
+Sources are in [[Roblox sword combat feel research (2026-10-08)]] and [[Sword moveset and animation readability research (2026-10-08)]].
+
+Henry agreed to 4 hits for the sword. Per-class length (dagger and rapier 5, greatsword and axe 3) is the plan for when those classes get behaviors (unsourced, modeled on Rogue Lineage).
+
+Built:
+- **Light3, the overhead chop, is no longer the finisher.**
+  - Weight Light, 1.15x damage, 14 stamina, 16 poise.
+  - Shorter hold: hits at 0.23 s, chains at 0.46 s.
+- **Light4 is a new spinning finisher.**
+  - Coils right, then turns one full circle left with the blade out at waist height, then holds a wide low end pose.
+  - Hit window 0.18 to 0.40 s, so the blade passes all the way around and hits anything nearby.
+  - Heavy weight, 1.5x damage, 16 stamina, 22 poise, Knockback 4.
+  - Spin keyframes are at most about 95 degrees apart, so the interpolation never goes the short way round. The legs use direct angles during the spin so they turn with the hips.
+- Both swords use the 4-hit combo. The Light3 and Light4 animations are published to the group.
+- The full string costs 54 stamina and deals 62 poise damage. That breaks the 60-poise Sparring Knight on the finisher, so the string leads into a riposte. The knockback is skipped because the knight is staggered, which keeps the riposte in range.
+
+![[combatfeel_light4_spin.jpg]]
+Light4 keyframes 0.1 to 0.44 s, from right to left.
+
+Tests:
+- Unit tests pass 19 of 19.
+- Knight play test: all 4 hits landed (24, 25.2, 27.6 and 36 damage), and the 4th broke the knight's poise.
+- No console errors.

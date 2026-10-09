@@ -46,6 +46,9 @@ QUICK HOW-TOS
   Read a player's level:      player:GetAttribute("ClassLevel") / ("Level_Sword") anywhere
 
 CHANGELOG  (newest first; one line per change, with your name)
+  2026-10-09  Henry  Sword light combo is now 4 hits: forehand, backhand, overhead chop (lighter now), and a new
+                     spinning finisher (Specs.Light4) that knocks enemies back. Both swords updated; Light3/Light4
+                     animations published. See Docs.Combat > STATE MACHINE. (via Claude)
   2026-10-09  Henry  Combat animations published for live servers: all 24 AnimSaves uploaded to the group and
                      filled into AnimationLibrary.Published (before this, live R15 players had no sword
                      animations). New AnimationBuilder.Publish() redoes it after Specs changes; Studio playtests

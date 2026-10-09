@@ -42,14 +42,25 @@ return {
 			Sound = "Swing",
 		},
 		{
-			Animation = "Light3",
-			DamageMultiplier = 1.4,
+			Animation = "Light3", -- overhead chop (2026-10-09: no longer the finisher)
+			DamageMultiplier = 1.15,
+			StaminaCost = 14,
+			PoiseDamage = 16,
+			Weight = "Light",
+			Lunge = 1.2,
+			Warp = 3.5,
+			Sound = "Swing",
+		},
+		{
+			Animation = "Light4", -- spinning finisher (2026-10-09): one full turn at waist height, hits
+			                      -- all around, pushes the target away and ends the string
+			DamageMultiplier = 1.5,
 			StaminaCost = 16,
-			PoiseDamage = 20,
+			PoiseDamage = 22,
 			Weight = "Heavy",
 			Lunge = 1.4,
 			Warp = 3,
-			Knockback = 4, -- finisher: pushes the target 4 studs away (ends the string, like TSB/Deepwoken)
+			Knockback = 4, -- like TSB's 4th hit and Deepwoken's Flourish (vault: Roblox sword combat feel research)
 			Sound = "Lunge",
 		},
 	},

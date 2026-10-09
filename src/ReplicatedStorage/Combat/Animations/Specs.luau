@@ -435,6 +435,88 @@ Specs.Light3 = {
 	Markers = { Lunge = 0.3, HitStart = 0.34, HitEnd = 0.46, CancelOpen = 0.64, RollOpen = 0.72, MoveOpen = 0.95 },
 }
 
+-- Light4 (2026-10-09): the string's finisher, a spinning horizontal cut. From Light3's low end pose
+-- the body coils right, the hips fire and the whole body turns one full circle to the left with the
+-- blade held out at waist height, then holds a wide low end pose (the payoff beat). The spin keys
+-- are at most ~95 degrees apart so pose interpolation never takes the short way round. Legs use
+-- direct angles during the spin so they turn with the hips (a pivot on the spot). Inspired by the
+-- vault's moveset research (spinning finishers in DMC/Genshin strings); timing is judgment.
+local SPIN_LEGS = { RightHip = V(18, 0, 0), RightKnee = V(-30, 0, 0), LeftHip = V(22, 0, 0), LeftKnee = V(-34, 0, 0) }
+local SPIN_ARM = { Pos = V(1.35, -0.05, -0.55), Blade = V(0.85, 0.05, -0.5), Pole = V(1, -0.4, 0.3) }
+local SPIN_LEFT_ARM = { Shoulder = V(10, 0, -60), Elbow = V(20, 0, 0) }
+
+Specs.Light4 = {
+	Priority = "Action3",
+	Loop = false,
+	Keyframes = {
+		{ T = 0, Pose = with(STANCE, { -- Light3's end: low, blade in front
+			Root = { Pos = V(0, -0.75, -0.2), Rot = V(0, 0, 0) },
+			Waist = V(-20, 0, 0),
+			RightHand = { Pos = V(0.25, -0.85, -1.1), Blade = V(0, -0.5, -0.85) },
+			LeftArm = { Shoulder = V(20, 0, -25), Elbow = V(30, 0, 0) },
+			Feet = stepFeet(-1.0, 1.1),
+		}), Ease = "Out" },
+		{ T = 0.1, Pose = with(STANCE, { -- coil right: blade pulled back past the right hip
+			Root = { Pos = V(0, -0.5, 0.1), Rot = V(0, -35, 0) },
+			Waist = V(-6, -40, 0),
+			RightHand = { Pos = V(1.3, -0.1, 0.5), Blade = V(0.5, 0.1, 0.85), Pole = V(1, -0.2, 0.6) },
+			LeftArm = { Shoulder = V(40, 0, -30), Elbow = V(60, 0, 0) },
+			Feet = stepFeet(-0.8, 0.6, 0.25, 0),
+		}), Ease = "In" },
+		{ T = 0.16, Pose = { -- hips fire, the spin starts
+			Root = { Pos = V(0, -0.45, -0.05), Rot = V(0, 15, 0) },
+			Waist = V(-8, -20, 0),
+			RightHand = { Pos = V(1.4, 0, -0.2), Blade = V(0.85, 0.05, -0.5), Pole = V(1, -0.4, 0.3) },
+			LeftArm = SPIN_LEFT_ARM,
+			Legs = SPIN_LEGS,
+		}, Ease = "Linear" },
+		{ T = 0.22, Pose = { -- blade crosses the front
+			Root = { Pos = V(0, -0.45, -0.05), Rot = V(0, 100, 0) },
+			Waist = V(-10, -5, 0),
+			RightHand = SPIN_ARM,
+			LeftArm = SPIN_LEFT_ARM,
+			Legs = SPIN_LEGS,
+		}, Ease = "Linear" },
+		{ T = 0.29, Pose = { -- back to the camera
+			Root = { Pos = V(0, -0.45, -0.05), Rot = V(0, 190, 0) },
+			Waist = V(-10, 0, 0),
+			RightHand = SPIN_ARM,
+			LeftArm = SPIN_LEFT_ARM,
+			Legs = SPIN_LEGS,
+		}, Ease = "Linear" },
+		{ T = 0.36, Pose = {
+			Root = { Pos = V(0, -0.45, -0.05), Rot = V(0, 280, 0) },
+			Waist = V(-10, 5, 0),
+			RightHand = SPIN_ARM,
+			LeftArm = SPIN_LEFT_ARM,
+			Legs = SPIN_LEGS,
+		}, Ease = "Out" },
+		{ T = 0.44, Pose = with(STANCE, { -- around again, wide low end pose
+			Root = { Pos = V(0, -0.7, -0.1), Rot = V(0, 350, 0) },
+			Waist = V(-16, 20, 0),
+			RightHand = { Pos = V(-0.3, -0.6, -1.2), Blade = V(-0.75, -0.2, -0.6), Pole = V(0.4, -1, 0.2) },
+			LeftArm = { Shoulder = V(0, 0, -55), Elbow = V(25, 0, 0) },
+			Feet = stepFeet(-1.1, 1.2),
+		}), Ease = "Out" },
+		{ T = 0.6, Pose = with(STANCE, { -- hold the end pose (payoff beat)
+			Root = { Pos = V(0, -0.72, -0.1), Rot = V(0, 352, 0) },
+			Waist = V(-16, 24, 0),
+			RightHand = { Pos = V(-0.4, -0.65, -1.1), Blade = V(-0.8, -0.25, -0.5), Pole = V(0.4, -1, 0.2) },
+			LeftArm = { Shoulder = V(0, 0, -55), Elbow = V(25, 0, 0) },
+			Feet = stepFeet(-1.1, 1.2),
+		}), Ease = "InOut" },
+		{ T = 0.9, Pose = with(STANCE, { -- recover, rear foot drags in
+			Root = { Pos = V(0, -0.42, 0), Rot = V(0, 4, 0) },
+			Waist = V(-8, 10, 0),
+			RightHand = { Pos = V(0.2, -0.8, -1.0), Blade = V(-0.45, 0.35, -0.8) },
+			LeftArm = { Shoulder = V(10, 0, -25), Elbow = V(25, 0, 0) },
+			Feet = stepFeet(-0.6, 0.9, 0, 0.16),
+		}), Ease = "InOut" },
+		{ T = 1.15, Pose = GUARD },
+	},
+	Markers = { Lunge = 0.12, HitStart = 0.18, HitEnd = 0.4, CancelOpen = 0.62, RollOpen = 0.66, MoveOpen = 0.8 },
+}
+
 Specs.HeavyCharge = {
 	Priority = "Action2",
 	Loop = true,
@@ -1021,7 +1103,8 @@ end
 local LIGHT_TIMING = { { 0, 0 }, { 0.26, 0.19 }, { 0.38, 0.29 }, { 0.5, 0.42 }, { 0.72, 0.62 } }
 retime(Specs.Light1, LIGHT_TIMING)
 retime(Specs.Light2, LIGHT_TIMING)
-retime(Specs.Light3, { { 0, 0 }, { 0.34, 0.27 }, { 0.46, 0.37 }, { 0.64, 0.54 }, { 0.95, 0.8 } })
+-- Light3 is the 3rd of 4 hits since 2026-10-09 (Light4 is the finisher), so it lost the long hold
+retime(Specs.Light3, { { 0, 0 }, { 0.34, 0.23 }, { 0.46, 0.32 }, { 0.64, 0.46 }, { 0.95, 0.64 } })
 
 return Specs
 

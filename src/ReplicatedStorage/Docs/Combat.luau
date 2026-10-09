@@ -67,8 +67,9 @@ STATE MACHINE  (WeaponController on the client, mirrored by CombatService on the
       CancelOpen  the next attack may start
       RollOpen    a roll/backstep may start (defaults to CancelOpen if the spec has none)
       MoveOpen    the action is over: state goes back to Idle, full move speed
-    Light1/Light2 = 0.42 / 0.48 / 0.62 s, Light3 = 0.54 / 0.62 / 0.80 s (2026-10-08 timing pass:
-    lights hit at 0.19 s, the finisher at 0.27 s; Specs.retime maps the old key times).
+    Light1/Light2 = 0.42 / 0.48 / 0.62 s, Light3 = 0.46 / 0.53 / 0.64 s, Light4 = 0.62 / 0.66 /
+    0.80 s (2026-10-08 timing pass: lights hit at 0.19 s, Light3 at 0.23 s, the Light4 spin is
+    active 0.18-0.40 s; Specs.retime maps the old key times).
     No cancel on wind-up except WindupCancelTime below.
   - Settle tail: after MoveOpen the attack track keeps playing its follow-through back to
     guard (cosmetic, no gameplay effect). Moving, blocking, charging, rolling or attacking
@@ -76,9 +77,11 @@ STATE MACHINE  (WeaponController on the client, mirrored by CombatService on the
   - Input buffer: a press is remembered for InputBufferTime and fires the moment its own
     window opens (a light at CancelOpen, a roll at RollOpen). The newest press replaces an
     older one, so a panic roll is never eaten by a queued attack.
-  - Light combo: Light1 -> Light2 -> Light3 (heavier finisher that knocks non-player targets back
-    Knockback = 4 studs, skipped on a staggered target so ripostes stay in range), resets after
-    ComboResetTime.
+  - Light combo (4 hits since 2026-10-09): Light1 forehand -> Light2 backhand -> Light3 overhead
+    chop -> Light4 spinning finisher (one full turn, hits all around, Heavy weight, knocks
+    non-player targets back Knockback = 4 studs; skipped on a staggered target so ripostes stay in
+    range). The full string costs 54 stamina and 62 poise damage, so it breaks a 60-poise enemy
+    on the finisher. Resets after ComboResetTime.
   - Flinch: a hit that doesn't break poise interrupts the current action for FlinchTime,
     unless the attack's armor window is up (HyperArmor / Armor, see "Damage types, armor, stun
     rules"; heavy, jump attack and guard counter have it). The server decides and the client obeys.
