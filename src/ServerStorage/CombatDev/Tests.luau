@@ -258,6 +258,64 @@ test("Sword timing pass: lights land by 0.2 s, running attack is the longest war
 	end
 end)
 
+-- Hit reactions, pushback, armor tiers (2026-10-09) ------------------------------------------
+
+test("HitReaction: light hits pick the side, heavy hits fold, from behind wins", function()
+	local reaction, slide, slideTime, armored = CombatRules.HitReaction({ Weight = "Light", HitFrom = "Left" }, "Fodder", false, false)
+	expectEqual(reaction, "HitLightLeft", "forehand")
+	expectNear(slide, CombatConfig.HitPush.Light, "light slide")
+	expectNear(slideTime, CombatConfig.HitPushTime, "light slide time")
+	expectEqual(armored, false, "not armored")
+	expectEqual((CombatRules.HitReaction({ Weight = "Light" }, "Fodder", false, false)), "HitLightFront", "default front")
+	expectEqual((CombatRules.HitReaction({ Weight = "Light", HitFrom = "Right" }, "Fodder", false, true)), "HitLightBack", "behind wins")
+	expectEqual((CombatRules.HitReaction({ Weight = "Heavy" }, "Fodder", false, false)), "HitHeavyFront", "heavy")
+	expectEqual((CombatRules.HitReaction({ Weight = "Heavy" }, "Fodder", false, true)), "HitHeavyBack", "heavy behind")
+end)
+
+test("HitReaction: Push and Knockback override the slide", function()
+	local _, slide = CombatRules.HitReaction({ Weight = "Light", Push = 1.3 }, "Fodder", false, false)
+	expectNear(slide, 1.3, "Push")
+	local _r, knock, knockTime = CombatRules.HitReaction({ Weight = "Heavy", Knockback = 4 }, "Fodder", false, false)
+	expectNear(knock, 4, "Knockback")
+	expectNear(knockTime, CombatConfig.KnockbackTime, "Knockback time")
+end)
+
+test("HitReaction: Elite armor only while attacking, Boss always", function()
+	local attack = { Weight = "Light" }
+	local reaction, slide, _t, armored = CombatRules.HitReaction(attack, "Elite", true, false)
+	expectEqual(reaction, "ArmorTwitch", "elite attacking")
+	expectEqual(armored, true, "elite armored")
+	expectNear(slide, CombatConfig.HitPush.Light * CombatConfig.ArmorTiers.Elite.ArmoredPushScale, "elite armored slide")
+	expectEqual((CombatRules.HitReaction(attack, "Elite", false, false)), "HitLightFront", "elite idle flinches")
+	local bossReaction, bossSlide = CombatRules.HitReaction({ Weight = "Heavy", Knockback = 4 }, "Boss", false, false)
+	expectEqual(bossReaction, "ArmorTwitch", "boss super armor")
+	expectNear(bossSlide, 0, "boss never slides")
+end)
+
+test("ArmorTierOf: attribute, then [BOSS] in the name, then default", function()
+	local model = Instance.new("Model")
+	model.Name = "KoboldWarrior"
+	expectEqual(CombatRules.ArmorTierOf(model), CombatConfig.DefaultArmorTier, "default")
+	model.Name = "IllfangKoboldLord[BOSS]"
+	expectEqual(CombatRules.ArmorTierOf(model), "Boss", "boss by name")
+	model:SetAttribute("ArmorTier", "Elite")
+	expectEqual(CombatRules.ArmorTierOf(model), "Elite", "attribute wins")
+	model:Destroy()
+end)
+
+test("IsFromBehind: in front, beside and behind", function()
+	local victim = CFrame.lookAt(Vector3.zero, Vector3.new(0, 0, -1))
+	expectEqual(CombatRules.IsFromBehind(victim, Vector3.new(0, 0, -5)), false, "in front")
+	expectEqual(CombatRules.IsFromBehind(victim, Vector3.new(5, 0, 0)), false, "beside")
+	expectEqual(CombatRules.IsFromBehind(victim, Vector3.new(0, 0, 5)), true, "behind")
+end)
+
+test("Specs: every reaction clip exists", function()
+	for _, name in { "HitLightFront", "HitLightLeft", "HitLightRight", "HitLightBack", "HitHeavyFront", "HitHeavyBack", "ArmorTwitch" } do
+		expectTrue(Specs[name] ~= nil, name)
+	end
+end)
+
 -- Runner -------------------------------------------------------------------------------------
 
 local Tests = {}

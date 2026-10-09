@@ -371,6 +371,48 @@ EFFECTS
   weapon behavior is built.
   Textures: Combat.VFXTextures (white-with-alpha images made by CombatDev TextureForge).
 
+HIT REACTIONS, PUSHBACK, ARMOR TIERS  (2026-10-09, Combat.HitReactions + CombatRules.HitReaction)
+  Every clean (unblocked) hit on a NON-player target plays a reaction and slides it:
+    Light hits   HitLightFront / Left / Right / Back, 0.4 s. attack.HitFrom picks the side the blade
+                 comes from (forehand Light1 = "Left", backhand Light2 = "Right", default Front);
+                 a hit from behind (more than HitReaction.BackAngle off its facing) is Back.
+    Heavy hits   HitHeavyFront / Back, 0.7 s (spinning finisher, heavy, running thrust...).
+    Armor        ArmorTwitch: a small shake played at TwitchWeight over the enemy's own attack, a
+                 white flash, +ArmorHitStop. The enemy keeps attacking.
+  Clips start on the peak pose (fade 0), freeze for the hitstop, then ease out. Upper body only.
+  The attacking client predicts the reaction (WeaponBehaviors.Sword); the server picks the same
+  one and sends EffectRemote "React" to everyone else. Rigs without the clips: custom mob rigs tilt
+  their root joint, the static training dummy rocks around its base (all local, cosmetic).
+  Slide: HitPush[Weight] (Light 1.0, Heavy 2.0 studs over HitPushTime), attack.Push overrides,
+  attack.Knockback (finisher, 4 studs over KnockbackTime) wins. One reusable LinearVelocity per
+  target (CombatService pushTarget), cut short by walls behind it, at most PushChainCap studs per
+  PushChainWindow. No reaction or slide on a staggered target (it plays its stagger; ripostes stay
+  in range) or on players (their client owns their physics).
+  Attacker step: when your hit connects you step in AttackerStep[Weight] (Light 0.9, Heavy 0) so a
+  string stays glued to the sliding enemy, never closer than MinSpacing (3 studs); an enemy that
+  doesn't budge (armored, anchored) isn't walked into.
+  Armor tiers (model attribute ArmorTier, else "Boss" if the name has [BOSS], else Fodder):
+    Fodder   always flinches, full slide (mobs, dummies)
+    Elite    hyper armor during its own attacks: twitch + 25% slide; flinches when idle (Sparring Knight)
+    Boss     super armor: always twitches, never slides; poise still breaks it into a stagger
+  Tuning: CombatConfig.HitReaction, HitPush, AttackerStep, ArmorTiers. Tests: CombatDev.Tests.
+
+COMBAT AUDIO  (2026-10-09, Combat.CombatAudio)
+  Layered Pro Sound Effects sounds (licensed for Roblox) replace the legacy swordslash/metal.ogg
+  files for Swing (SwingLight), HeavySwing (SwingHeavy), Lunge (Thrust), Roll, Block, GuardBreak,
+  Draw and Sheath; Effects.PlaySound routes those names there. Parry sounds are unchanged.
+    - Hits pick a layer by what was hit: model attribute HitMaterial = Flesh (default) | Armor
+      (Sparring Knight) | Wood (training dummies), plus a heavy body layer on Heavy/counter hits.
+    - No variant repeats twice in a row; pitch (semitones) and volume (dB) are randomized per play.
+    - Whooshes are timed so the variant's loudest point (PeakAt) lands on the hit frame.
+    - A hit ducks the Swing SoundGroup for 0.15 s. SoundGroups: SoundService.Combat.Swing/Hit/
+      Defense/Foley, with voice caps per group.
+    - Rolloff: your own sounds stay full volume to 20 studs (camera distance), others fade from
+      8-12 studs (InverseTapered) instead of the old 10000-stud max.
+  Add or swap a sound: edit the BANK table at the top of Combat.CombatAudio (Id, Volume, PeakAt,
+  optional Region). Only use creator "ProSoundEffects" / "APMOfficial" store audio; many free
+  uploads are ripped from other games.
+
 WEAPONFORGE  (ServerStorage.CombatDev.WeaponForge, dev only, 2026-10-08)
   Weapon models are generated from code, the same way animations come from Specs:
     MeshKit        loft, lathe, chamfered extrude, tube sweep, smoothing by angle -> EditableMesh
@@ -396,8 +438,10 @@ PLACEHOLDERS TO REPLACE
   built-in sounds for Swing/Lunge/Hit/Block/Roll (Parry + ParryRing now use Pro Sound Effects
   ids 9125669267 and 9125672551; audition and swap in Combat.Assets.Sounds if they don't fit).
 
-NOT BUILT YET (designed for)
-  Sword Skills (definition.Skills), ripostes/backstabs, damage numbers, jump attacks,
+NOT BUILT YET (designed for; updated 2026-10-09, ripostes and jump attacks exist)
+  Sword Skills (definition.Skills), backstabs, damage numbers, enemy telegraph cues, group AI
+  (attack tokens, spacing), kill/death feedback, mobile touch controls, hit lag compensation
+  (target position history). Ranked list: vault note "Melee fundamentals gap audit".
   (Inventory now exists: EquipRemote "Equip" is gated on ownership, see Docs.Inventory.)
 ]]
 

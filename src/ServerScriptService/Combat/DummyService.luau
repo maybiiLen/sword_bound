@@ -31,6 +31,10 @@ local function register(model: Instance)
 		return
 	end
 	registered[model] = true
+	-- training dummies sound like wood when hit (Combat.CombatAudio); enemies set their own material
+	if model:GetAttribute("HitMaterial") == nil and not CollectionService:HasTag(model, CombatConfig.EnemyTag) then
+		model:SetAttribute("HitMaterial", "Wood")
+	end
 
 	local parent = model.Parent
 	local snapshot = model:Clone()
@@ -56,3 +60,4 @@ function DummyService:Start()
 end
 
 return DummyService
+

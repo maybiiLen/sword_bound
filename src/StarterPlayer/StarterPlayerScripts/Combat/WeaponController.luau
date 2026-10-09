@@ -86,7 +86,7 @@ local humanoid: Humanoid? = nil
 local anims = nil
 local weapon = nil
 
-local action: { kind: string, token: number, cancelOpen: boolean, rollOpen: boolean, attack: any?, startedAt: number?, pressId: number?, aimTarget: BasePart?, aimAngle: number? }? = nil
+local action: { kind: string, token: number, cancelOpen: boolean, rollOpen: boolean, attack: any?, startedAt: number?, pressId: number?, aimTarget: BasePart?, aimAngle: number?, stepped: boolean? }? = nil
 local token = 0
 local comboStep = 0
 local lastLightEnd = -math.huge
@@ -340,6 +340,53 @@ local function lunge(attack, scale: number, target: BasePart?, angle: number)
 	if step > 0 then
 		movement:Dash(rootLook(), CombatConfig.LungeSpeed * step * scale, CombatConfig.LungeTime)
 	end
+end
+
+-- When a hit connects (2026-10-09): the attacker steps in by the attack's Step (default
+-- CombatConfig.AttackerStep[Weight]) while the server slides the target, so a string stays glued
+-- to the enemy instead of pushing it out of reach. The step uses the same predicted slide as the
+-- server (CombatRules.HitReaction) and never brings you closer than MinSpacing, so an armored or
+-- anchored target that doesn't budge doesn't get walked into. Once per attack (a spin can hit
+-- several targets).
+local function stepIn(target: Model?)
+	local current = action
+	if not current or current.stepped or not current.attack or typeof(target) ~= "Instance" then
+		return
+	end
+	current.stepped = true
+	local attack = current.attack
+	local step = attack.Step
+	if typeof(step) ~= "number" then
+		step = CombatConfig.AttackerStep[attack.Weight or "Light"] or 0
+	end
+	if step <= 0.05 then
+		return
+	end
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local targetRoot = (target :: Model):FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root or not targetRoot then
+		return
+	end
+	local slide = 0
+	local breaksPoise = CombatRules.PredictsPoiseBreak(target, attack) -- staggers: the server gives no slide
+	if not breaksPoise and not Players:GetPlayerFromCharacter(target :: Model) and not targetRoot.Anchored then
+		local targetAttacking = CombatRules.IsCounterState((target :: Model):GetAttribute(Attr.CombatState))
+		local fromBehind = CombatRules.IsFromBehind(targetRoot.CFrame, root.Position)
+		local _reaction, predicted = CombatRules.HitReaction(attack, CombatRules.ArmorTierOf(target), targetAttacking, fromBehind)
+		slide = predicted
+	end
+	local offset = targetRoot.Position - root.Position
+	local flatOffset = Vector3.new(offset.X, 0, offset.Z)
+	if flatOffset.Magnitude < 1e-3 then
+		return
+	end
+	local allowed = flatOffset.Magnitude + slide - CombatConfig.MinSpacing
+	step = math.clamp(step, 0, math.max(allowed, 0))
+	if step <= 0.05 then
+		return
+	end
+	local duration = CombatConfig.AttackerStepTime
+	movement:Dash(flatOffset.Unit, step / (duration * (2 / 3)), duration)
 end
 
 -- Jump attacks: drive the character straight down so the swing lands with them.
@@ -736,6 +783,7 @@ local function startRiposte(target: Model): boolean
 			local damageType = riposte.DamageType or weapon.Definition.DamageType or "Slash"
 			local look = (root :: BasePart).CFrame
 			Effects.HitSpark(position, {
+				Own = true,
 				DamageType = damageType,
 				Weight = "Heavy",
 				Target = target,
@@ -749,7 +797,7 @@ local function startRiposte(target: Model): boolean
 		end,
 		RipOut = function()
 			if myToken == token then
-				Effects.HitSpark(targetRoot.Position)
+				Effects.HitSpark(targetRoot.Position, { Own = true, Target = target, Weight = "Heavy" })
 				Effects.Shake(CombatConfig.Shake.Light)
 			end
 		end,
@@ -961,8 +1009,9 @@ local function buildWeapon(char: Model)
 		return
 	end
 	weapon = result
-	weapon.HitLanded = function()
+	weapon.HitLanded = function(target)
 		movement:StopDash()
+		stepIn(target)
 	end
 	local drawn = char:GetAttribute(Attr.WeaponDrawn) == true
 	weapon:SetDrawn(drawn)

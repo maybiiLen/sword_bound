@@ -51,6 +51,37 @@ local CombatConfig = {
 	SoftTurnRate = { Windup = 720, Active = 180 }, -- degrees/s the character turns toward the target
 	                                              -- (TDM pattern: fast in windup, slow mid swing, none after)
 	KnockbackTime = 0.22, -- seconds an attack's Knockback (studs) pushes a non-player target
+
+	-- Hit reactions, pushback and armor tiers (2026-10-09, vault "Hit reactions, pushback and armor
+	-- research"). Patterns are sourced (Elden Ring damage levels and poise, GBVSR/Capcom pushback,
+	-- God of War small hit translations, Genshin extra hit freeze on unbroken poise); the numbers are
+	-- judgment (unsourced). CombatRules.HitReaction picks the reaction and the slide from these.
+	HitReaction = {
+		BackAngle = 110, -- the attacker is "behind" the victim when more than this many degrees off its facing
+		ArmorFlashTime = 0.08, -- white flash on a hit that armor absorbed (no flinch)
+		ArmorHitStop = 0.04, -- extra hitstop on an armored hit, so it still feels solid
+		TwitchWeight = 0.45, -- weight of the additive ArmorTwitch track over the enemy's attack
+	},
+	HitPush = { Light = 1.0, Heavy = 2.0 } :: { [string]: number }, -- studs a clean hit slides a non-player
+	                                                               -- target (attack.Push / Knockback override)
+	HitPushTime = 0.12, -- seconds a normal hit's slide takes (Knockback uses KnockbackTime)
+	AttackerStep = { Light = 0.9, Heavy = 0 } :: { [string]: number }, -- studs the attacker steps in when a
+	                                                                 -- hit connects (attack.Step overrides), so a
+	                                                                 -- string stays glued to a sliding target
+	AttackerStepTime = 0.12,
+	MinSpacing = 3.0, -- the attacker step never brings you closer than this to the target
+	PushChainCap = 10, -- max studs of slide one target takes per PushChainWindow (no infinite carries)
+	PushChainWindow = 2,
+	-- Armor tiers: model attribute ArmorTier, else "Boss" when the name has [BOSS], else DefaultArmorTier.
+	--   ArmorWhileAttacking  hits during the target's own attack only twitch it (hyper armor)
+	--   AlwaysArmored        every hit only twitches it (super armor); poise still breaks it
+	--   PushScale            slide multiplier on a normal hit; ArmoredPushScale when armor absorbed it
+	ArmorTiers = {
+		Fodder = { ArmorWhileAttacking = false, AlwaysArmored = false, PushScale = 1, ArmoredPushScale = 1 },
+		Elite = { ArmorWhileAttacking = true, AlwaysArmored = false, PushScale = 1, ArmoredPushScale = 0.25 },
+		Boss = { ArmorWhileAttacking = true, AlwaysArmored = true, PushScale = 0.25, ArmoredPushScale = 0 },
+	} :: { [string]: any },
+	DefaultArmorTier = "Fodder",
 	WarpReachRecheck = 0.25, -- server: a hit beyond Reach + ReachTolerance (but inside the warp allowance)
 	                         -- is checked again this much later, once the attacker's warp has replicated
 	MomentumCarryTime = 0.18, -- an attack keeps your current velocity and eases it out over this long

@@ -1071,6 +1071,66 @@ Specs.GuardCounter = {
 	Markers = { Lunge = 0.06, HitStart = 0.15, HitEnd = 0.3, CancelOpen = 0.6, RollOpen = 0.66, MoveOpen = 0.82 },
 }
 
+-- Hit reactions (2026-10-09, vault "Hit reactions, pushback and armor research"). Played on
+-- non-player targets (NPCs) by Combat.HitReactions; CombatRules.HitReaction picks which one.
+-- Craft rules from the research: start ON the peak pose (played with fade 0), hold it through the
+-- hitstop, then ease out; the body is thrown the way the blade's energy goes. Upper body only, so
+-- the enemy's legs and its own guard arm keep playing underneath. Values are judgment (unsourced).
+local REACT_REST = { Waist = V(0, 0, 0), Neck = V(0, 0, 0), LeftArm = { Shoulder = V(10, 0, -12), Elbow = V(20, 0, 0) } }
+
+local function lightReaction(waist: Vector3, neck: Vector3, arm: Vector3)
+	return {
+		-- Action2: above the idle/guard (Action) but below attacks (Action3) and Stagger/GuardBreak
+		-- (Action4), so an enemy's next attack or a stagger takes over the moment it starts
+		Priority = "Action2",
+		Loop = false,
+		UpperBodyOnly = true,
+		Keyframes = {
+			{ T = 0, Pose = { Waist = waist, Neck = neck, LeftArm = { Shoulder = arm, Elbow = V(30, 0, 0) } }, Ease = "Out" },
+			{ T = 0.09, Pose = { Waist = waist * 1.15, Neck = neck * 1.15, LeftArm = { Shoulder = arm, Elbow = V(35, 0, 0) } }, Ease = "InOut" },
+			{ T = 0.4, Pose = REACT_REST },
+		},
+		Markers = {},
+	}
+end
+
+local function heavyReaction(waist: Vector3, neck: Vector3, arm: Vector3)
+	return {
+		Priority = "Action2",
+		Loop = false,
+		UpperBodyOnly = true,
+		Keyframes = {
+			{ T = 0, Pose = { Waist = waist, Neck = neck, LeftArm = { Shoulder = arm, Elbow = V(15, 0, 0) } }, Ease = "Out" },
+			{ T = 0.16, Pose = { Waist = waist * 1.2, Neck = neck * 1.2, LeftArm = { Shoulder = arm * 1.1, Elbow = V(20, 0, 0) } }, Ease = "InOut" },
+			{ T = 0.45, Pose = { Waist = waist * 0.5, Neck = neck * 0.4, LeftArm = { Shoulder = V(30, 0, -30), Elbow = V(30, 0, 0) } }, Ease = "InOut" },
+			{ T = 0.7, Pose = REACT_REST },
+		},
+		Markers = {},
+	}
+end
+
+Specs.HitLightFront = lightReaction(V(22, 0, 0), V(18, 0, 0), V(30, 0, -40)) -- rocked back
+Specs.HitLightLeft = lightReaction(V(8, -34, -14), V(6, -24, -12), V(20, 0, -55)) -- blade from its left: twist right
+Specs.HitLightRight = lightReaction(V(8, 34, 14), V(6, 24, 12), V(40, 0, -20)) -- blade from its right: twist left
+Specs.HitLightBack = lightReaction(V(-24, 0, 0), V(-20, 0, 0), V(-15, 0, -35)) -- hit from behind: whipped forward
+Specs.HitHeavyFront = heavyReaction(V(36, 0, 0), V(26, 0, 0), V(70, 0, -65)) -- folded back hard, arm flung
+Specs.HitHeavyBack = heavyReaction(V(-38, 0, 0), V(-26, 0, 0), V(-35, 0, -55))
+
+-- ArmorTwitch: a short shake blended at TwitchWeight over the enemy's own attack when armor absorbs
+-- a hit (it keeps attacking; For Honor/Elden Ring hyper armor pattern). Not truly additive: it
+-- pulls toward its pose at that weight, and HitReactions fades it out early so it never pops.
+Specs.ArmorTwitch = {
+	Priority = "Action4",
+	Loop = false,
+	UpperBodyOnly = true,
+	Keyframes = {
+		{ T = 0, Pose = { Waist = V(8, 6, 0), Neck = V(6, 0, 0) }, Ease = "Out" },
+		{ T = 0.06, Pose = { Waist = V(5, -4, 0), Neck = V(4, 0, 0) }, Ease = "InOut" },
+		{ T = 0.22, Pose = { Waist = V(0, 0, 0), Neck = V(0, 0, 0) } },
+	},
+	Markers = {},
+}
+
 -- Timing pass (2026-10-08, "Sword combat feel revision" in the vault). The first light hit landed at
 -- 0.26 s, slower than Genshin sword openers (Keqing 0.17 s, Kaeya 0.23 s, KQM library) and slow for
 -- Roblox M1s, while the hit-to-hit pace was fine. The lights now land at ~0.19 s and chain every

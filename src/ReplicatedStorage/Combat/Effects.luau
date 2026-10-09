@@ -8,7 +8,10 @@
 	Effects.Listen(). So the attacker never sees an effect twice.
 
 	API:
-		Effects.PlaySound(parent, soundName)            Sound from Combat.Assets.Sounds
+		Effects.PlaySound(parent, soundName, pitchScale?, hitIn?)   hitIn: seconds to the hit frame
+		                                                Swing/HeavySwing/Lunge/Roll/Block/GuardBreak/Draw/
+		                                                Sheath go through Combat.CombatAudio (layered PSE
+		                                                sounds, 2026-10-09); others from Combat.Assets.Sounds
 		Effects.SetTrail(character, enabled)            the SwingTrail on the character's weapon
 		Effects.HitSpark(position, info?)               layered hit effect by damage type (Combat.VFX):
 		                                                info = { DamageType, Counter, Weight, Direction, Target }
@@ -34,6 +37,8 @@
 		("Parry" | "PerfectParry", position, attackerModel?)
 		("Draw", character, drawn)
 		("Sound", parent, soundName)
+		("React", targetModel, reaction, freezeSeconds, armored, attackerPosition)   hit reaction on an NPC
+		                                                (Combat.HitReactions)
 
 	See Docs.Combat > "Effects".
 ]]
@@ -45,6 +50,8 @@ local TweenService = game:GetService("TweenService")
 local Combat = ReplicatedStorage.Combat
 local CombatConfig = require(Combat.CombatConfig)
 local VFX = require(Combat.VFX)
+local HitReactions = require(Combat.HitReactions)
+local CombatAudio = require(Combat.CombatAudio)
 local Sounds = Combat.Assets.Sounds
 local HitSparkTemplate = Combat.Assets.VFX.HitSpark
 
@@ -52,7 +59,12 @@ local Effects = {}
 
 local cameraHooks = {}
 
-function Effects.PlaySound(parent: Instance?, soundName: string?, pitchScale: number?)
+function Effects.PlaySound(parent: Instance?, soundName: string?, pitchScale: number?, hitIn: number?)
+	local event = CombatAudio.EventFor(soundName)
+	if event and parent then
+		CombatAudio.Play(event, parent, { PitchScale = pitchScale, HitIn = hitIn })
+		return
+	end
 	local template = soundName and Sounds:FindFirstChild(soundName)
 	if not template or not parent then
 		return
@@ -157,7 +169,7 @@ end
 
 function Effects.HitSpark(position: Vector3, info: any?)
 	VFX.Impact(position, info or { DamageType = "Slash" })
-	soundAt(position, "Hit", randomPitch(0.06))
+	CombatAudio.PlayHit(position, info) -- material layer (Flesh/Armor/Wood) + heavy layer
 end
 
 -- Blocks stay deliberately dull (small pale spark, low clunk) so a parry is obvious by ear alone.
@@ -292,7 +304,10 @@ function Effects.Listen()
 			end
 			-- other players' WeaponForge weapons get their class trail too (cheap, idempotent)
 			VFX.StyleTrail(character:FindFirstChild(CombatConfig.WeaponModelName))
-			Effects.PlaySound(character:FindFirstChild("HumanoidRootPart"), soundName)
+			-- players: time the whoosh so its loudest point lands on the hit frame. NPCs keep it at
+			-- the start of the wind-up: it is the audio warning for their attack.
+			local isPlayer = game:GetService("Players"):GetPlayerFromCharacter(character) ~= nil
+			Effects.PlaySound(character:FindFirstChild("HumanoidRootPart"), soundName, nil, if isPlayer then trailStart else nil)
 			task.delay(trailStart or 0, function()
 				Effects.SetTrail(character, true)
 				task.delay(trailDuration or 0.2, Effects.SetTrail, character, false)
@@ -323,6 +338,14 @@ function Effects.Listen()
 			local parent, soundName = ...
 			if typeof(parent) == "Instance" then
 				Effects.PlaySound(parent, soundName)
+			end
+		elseif kind == "React" then
+			local model, reaction, freeze, armored, from = ...
+			if typeof(model) == "Instance" and typeof(reaction) == "string" then
+				if armored == true then
+					Effects.FlashModel(model, Color3.new(1, 1, 1), CombatConfig.HitReaction.ArmorFlashTime)
+				end
+				HitReactions.Play(model, reaction, if typeof(freeze) == "number" then freeze else 0, if typeof(from) == "Vector3" then from else nil)
 			end
 		end
 	end)

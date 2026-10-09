@@ -545,11 +545,21 @@ local function getTargetPosition(model: Model): Vector3
 	return if root and root:IsA("BasePart") then root.Position else model:GetPivot().Position
 end
 
--- Push a non-player target `studs` away from the attacker over CombatConfig.KnockbackTime (combo
--- finishers, attack.Knockback). Players are never pushed by the server: their client owns their
--- physics, so a server mover would fight it (and PvP is off).
-local function applyKnockback(target: Model, attackerRoot: BasePart, studs: number)
-	if Players:GetPlayerFromCharacter(target) then
+-- Slide a non-player target `studs` away from the attacker over `seconds` (2026-10-09: every clean
+-- hit slides the target, not only finishers; CombatRules.HitReaction picks the distance). One
+-- reusable LinearVelocity per target, and a new hit overwrites the running slide instead of
+-- stacking movers. The slide stops short of walls behind the target, and one target takes at most
+-- PushChainCap studs per PushChainWindow so a string can't carry it across the map. Players are
+-- never pushed by the server: their client owns their physics (and PvP is off).
+-- strong table (Instances can drop out of weak-keyed tables while they still exist), cleared when
+-- the root is destroyed
+local pushers: { [BasePart]: { mover: LinearVelocity, token: number, history: { { number } } } } = {}
+local pushParams = RaycastParams.new()
+pushParams.FilterType = Enum.RaycastFilterType.Exclude
+pushParams.RespectCanCollide = true
+
+local function pushTarget(target: Model, attackerRoot: BasePart, studs: number, seconds: number)
+	if studs <= 0.05 or seconds <= 0 or Players:GetPlayerFromCharacter(target) then
 		return
 	end
 	local targetRoot = target:FindFirstChild("HumanoidRootPart")
@@ -561,24 +571,68 @@ local function applyKnockback(target: Model, attackerRoot: BasePart, studs: numb
 	if flatOffset.Magnitude < 1e-3 then
 		return
 	end
-	local duration = CombatConfig.KnockbackTime
-	local attachment = Instance.new("Attachment")
-	attachment.Name = "KnockbackAttachment"
-	attachment.Parent = targetRoot
-	local mover = Instance.new("LinearVelocity")
-	mover.Name = "Knockback"
-	mover.Attachment0 = attachment
-	mover.RelativeTo = Enum.ActuatorRelativeTo.World
-	mover.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
-	mover.PrimaryTangentAxis = Vector3.xAxis
-	mover.SecondaryTangentAxis = Vector3.zAxis
-	mover.MaxForce = 1e5
 	local direction = flatOffset.Unit
-	local speed = studs / duration
-	mover.PlaneVelocity = Vector2.new(direction.X, direction.Z) * speed
-	mover.Parent = targetRoot
-	Debris:AddItem(mover, duration)
-	Debris:AddItem(attachment, duration)
+
+	local entry = pushers[targetRoot]
+	if not entry then
+		local attachment = Instance.new("Attachment")
+		attachment.Name = "CombatPushAttachment"
+		attachment.Parent = targetRoot
+		local mover = Instance.new("LinearVelocity")
+		mover.Name = "CombatPush"
+		mover.Attachment0 = attachment
+		mover.RelativeTo = Enum.ActuatorRelativeTo.World
+		mover.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
+		mover.PrimaryTangentAxis = Vector3.xAxis
+		mover.SecondaryTangentAxis = Vector3.zAxis
+		mover.MaxForce = 1e5
+		mover.Enabled = false
+		mover.Parent = targetRoot
+		entry = { mover = mover, token = 0, history = {} }
+		pushers[targetRoot] = entry
+		local rootPart = targetRoot :: BasePart
+		rootPart.Destroying:Once(function()
+			pushers[rootPart] = nil
+		end)
+	end
+
+	-- chain cap: only PushChainCap studs per PushChainWindow
+	local now = os.clock()
+	local recent = 0
+	local kept = {}
+	for _, item in entry.history do
+		if now - item[1] <= CombatConfig.PushChainWindow then
+			table.insert(kept, item)
+			recent += item[2]
+		end
+	end
+	entry.history = kept
+	studs = math.min(studs, CombatConfig.PushChainCap - recent)
+	if studs <= 0.05 then
+		return
+	end
+
+	-- walls (and other characters) behind the target cut the slide
+	pushParams.FilterDescendantsInstances = { target, attackerRoot.Parent :: Instance }
+	local hit = workspace:Raycast(targetRoot.Position, direction * (studs + 1.5), pushParams)
+	if hit then
+		studs = math.max(hit.Distance - 1.5, 0)
+		if studs <= 0.05 then
+			return
+		end
+	end
+
+	table.insert(entry.history, { now, studs })
+	entry.token += 1
+	local token = entry.token
+	local current = entry
+	current.mover.PlaneVelocity = Vector2.new(direction.X, direction.Z) * (studs / seconds)
+	current.mover.Enabled = true
+	task.delay(seconds, function()
+		if current.token == token and current.mover.Parent then
+			current.mover.Enabled = false
+		end
+	end)
 end
 
 local resolveHit -- defined after onHit
@@ -645,7 +699,7 @@ local function onHit(player: Player, target: unknown, position: unknown)
 	resolveHit(player, action, target, humanoid, root, position)
 end
 
--- Damage, knockback and HitConfirmed for a hit that passed validation.
+-- Damage, hit reaction + slide, and HitConfirmed for a hit that passed validation.
 function resolveHit(player: Player, action: Action, target: Model, humanoid: Humanoid, root: BasePart?, position: unknown)
 	local definition = action.definition
 	local targetPosition = getTargetPosition(target)
@@ -661,6 +715,8 @@ function resolveHit(player: Player, action: Action, target: Model, humanoid: Hum
 	if typeof(position) == "Vector3" and (position - targetPosition).Magnitude < 8 then
 		effectPosition = position
 	end
+	-- the target's state BEFORE this hit decides its armor (hyper armor during its own attack)
+	local wasAttacking = CombatRules.IsCounterState(target:GetAttribute(Attr.CombatState))
 	local result, dealt = DamageService:ResolveHit({
 		Attacker = player,
 		Target = humanoid,
@@ -674,10 +730,27 @@ function resolveHit(player: Player, action: Action, target: Model, humanoid: Hum
 		GuardDamage = definition.GuardDamage,
 		Weight = attack.Weight,
 	})
-	-- no knockback on a staggered target: it would push a riposte-able enemy out of riposte range
+	-- hit reaction + slide (2026-10-09). None on a staggered target: it plays its stagger, and a
+	-- slide would push a riposte-able enemy out of riposte range. The attacker's client already
+	-- predicted the same reaction (CombatRules.HitReaction), so it goes to everyone else.
 	local clean = result == "Hit" or result == "Crit"
-	if clean and (attack.Knockback or 0) > 0 and root and not PoiseService:IsStaggered(target) then
-		applyKnockback(target, root, attack.Knockback)
+	if clean and root and not PoiseService:IsStaggered(target) and not Players:GetPlayerFromCharacter(target) then
+		local targetRoot = target:FindFirstChild("HumanoidRootPart")
+		local fromBehind = false
+		if targetRoot and targetRoot:IsA("BasePart") then
+			fromBehind = CombatRules.IsFromBehind(targetRoot.CFrame, root.Position)
+		end
+		local reaction, slide, slideTime, armored = CombatRules.HitReaction(attack, CombatRules.ArmorTierOf(target), wasAttacking, fromBehind)
+		pushTarget(target, root, slide, slideTime)
+		local classStops = CombatConfig.ClassHitStop[definition.Class]
+		local freeze = (classStops and classStops[attack.Weight]) or CombatConfig.HitStop[attack.Weight] or 0.06
+		if wasAttacking then
+			freeze += CombatConfig.CounterHitStop
+		end
+		if armored then
+			freeze += CombatConfig.HitReaction.ArmorHitStop
+		end
+		fireOthers(player, "React", target, reaction, freeze, armored, root.Position)
 	end
 	CombatService.HitConfirmed:Fire(player, target, result, dealt)
 end

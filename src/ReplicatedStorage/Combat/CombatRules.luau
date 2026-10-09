@@ -19,6 +19,11 @@
 			-> (newEnd, newKind)                                 longest stun wins
 		CombatRules.StaggerImmunity(pvp?) -> seconds
 		CombatRules.WarpOf(attack) -> studs                       attack.Warp, else CombatConfig.DefaultWarp
+		CombatRules.ArmorTierOf(model) -> "Fodder" | "Elite" | "Boss"
+		CombatRules.IsFromBehind(victimCFrame, attackerPosition) -> boolean
+		CombatRules.PredictsPoiseBreak(target, attack) -> boolean   from the replicated Poise attribute
+		CombatRules.HitReaction(attack, tier, targetAttacking, fromBehind)
+			-> (reaction animation, slide studs, slide seconds, armored)   see CombatConfig "Hit reactions"
 		CombatRules.WarpDistance(distance, angle, maxWarp) -> studs
 		                                                         how far an attack travels toward a target
 		                                                         `distance` away, `angle` degrees off the aim
@@ -179,6 +184,85 @@ function CombatRules.StaggerImmunity(pvp: boolean?): number
 		return CombatConfig.PvP.StaggerImmunityTime
 	end
 	return CombatConfig.StaggerImmunityTime
+end
+
+-- Hit reactions (2026-10-09). Both the attacker's client (prediction) and the server (slide + the
+-- reaction everyone else sees) call these, so they always agree.
+function CombatRules.ArmorTierOf(model: Instance?): string
+	if model then
+		local tier = model:GetAttribute("ArmorTier")
+		if typeof(tier) == "string" and (CombatConfig.ArmorTiers :: any)[tier] then
+			return tier
+		end
+		if string.find(model.Name, "[BOSS]", 1, true) then
+			return "Boss"
+		end
+	end
+	return CombatConfig.DefaultArmorTier
+end
+
+-- Will this hit break the target's poise? (client prediction from the replicated Poise attribute;
+-- the server decides). A poise-breaking hit plays the stagger, so no reaction, slide or step.
+function CombatRules.PredictsPoiseBreak(target: Instance?, attack: any): boolean
+	if not target then
+		return false
+	end
+	local poise = target:GetAttribute("Poise")
+	if typeof(poise) ~= "number" then
+		return false
+	end
+	return poise - ((attack and attack.PoiseDamage) or 0) <= 0
+end
+
+function CombatRules.IsFromBehind(victimCFrame: CFrame, attackerPosition: Vector3): boolean
+	local look = victimCFrame.LookVector
+	local flatLook = Vector3.new(look.X, 0, look.Z)
+	local offset = attackerPosition - victimCFrame.Position
+	local flatOffset = Vector3.new(offset.X, 0, offset.Z)
+	if flatLook.Magnitude < 1e-3 or flatOffset.Magnitude < 1e-3 then
+		return false
+	end
+	local dot = math.clamp(flatLook.Unit:Dot(flatOffset.Unit), -1, 1)
+	return math.deg(math.acos(dot)) > CombatConfig.HitReaction.BackAngle
+end
+
+-- Which reaction a clean (unblocked) hit plays on a non-player target, and how far it slides.
+--   Light hits: HitLight<Front|Left|Right|Back> (attack.HitFrom = the side of the VICTIM the blade
+--   comes from, default Front; from behind always Back). Heavy hits: HitHeavy<Front|Back>.
+--   Armor (the tier's hyper armor during the target's own attack, or a boss's super armor):
+--   ArmorTwitch, a small additive shake, and the slide shrinks to ArmoredPushScale.
+--   Slide: attack.Knockback (finishers, over KnockbackTime), else attack.Push, else HitPush[Weight].
+function CombatRules.HitReaction(attack: any, tierName: string?, targetAttacking: boolean, fromBehind: boolean): (string, number, number, boolean)
+	local tiers = CombatConfig.ArmorTiers :: any
+	local tier = tiers[tierName or ""] or tiers[CombatConfig.DefaultArmorTier]
+	local weight = (attack and attack.Weight) or "Light"
+	local armored = tier.AlwaysArmored or (tier.ArmorWhileAttacking and targetAttacking)
+
+	local slide = 0
+	local slideTime = CombatConfig.HitPushTime
+	if attack and typeof(attack.Knockback) == "number" and attack.Knockback > 0 then
+		slide = attack.Knockback
+		slideTime = CombatConfig.KnockbackTime
+	elseif attack and typeof(attack.Push) == "number" then
+		slide = attack.Push
+	else
+		slide = (CombatConfig.HitPush :: any)[weight] or 0
+	end
+
+	if armored then
+		return "ArmorTwitch", slide * tier.ArmoredPushScale, slideTime, true
+	end
+	slide = slide * tier.PushScale
+	if weight == "Heavy" then
+		return if fromBehind then "HitHeavyBack" else "HitHeavyFront", slide, slideTime, false
+	end
+	local side = "Front"
+	if fromBehind then
+		side = "Back"
+	elseif attack and (attack.HitFrom == "Left" or attack.HitFrom == "Right") then
+		side = attack.HitFrom
+	end
+	return "HitLight" .. side, slide, slideTime, false
 end
 
 -- Attack warp (see CombatConfig "Attack warp"). The server also uses WarpOf to widen its reach check,

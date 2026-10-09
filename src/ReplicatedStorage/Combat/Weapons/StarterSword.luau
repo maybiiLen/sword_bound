@@ -23,6 +23,7 @@ return {
 	Combo = {
 		{
 			Animation = "Light1",
+			HitFrom = "Left", -- forehand: the blade comes in from the victim's left
 			DamageMultiplier = 1.0,
 			StaminaCost = 12,
 			PoiseDamage = 12,
@@ -33,6 +34,7 @@ return {
 		},
 		{
 			Animation = "Light2",
+			HitFrom = "Right", -- backhand
 			DamageMultiplier = 1.05,
 			StaminaCost = 12,
 			PoiseDamage = 12,
@@ -43,6 +45,7 @@ return {
 		},
 		{
 			Animation = "Light3", -- overhead chop (2026-10-09: no longer the finisher)
+			Push = 1.3, -- the chop drives the victim back a little further than a light
 			DamageMultiplier = 1.15,
 			StaminaCost = 14,
 			PoiseDamage = 16,
@@ -61,7 +64,7 @@ return {
 			Lunge = 1.4,
 			Warp = 3,
 			Knockback = 4, -- like TSB's 4th hit and Deepwoken's Flourish (vault: Roblox sword combat feel research)
-			Sound = "Lunge",
+			Sound = "HeavySwing", -- big low whoosh (CombatAudio SwingHeavy)
 		},
 	},
 

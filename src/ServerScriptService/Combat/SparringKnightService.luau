@@ -222,6 +222,12 @@ local function register(model: Instance)
 
 	humanoid.WalkSpeed = WALK_SPEED
 	humanoid.AutoRotate = false
+	if model:GetAttribute("ArmorTier") == nil then
+		model:SetAttribute("ArmorTier", "Elite") -- hyper armor during its own attacks (CombatConfig.ArmorTiers)
+	end
+	if model:GetAttribute("HitMaterial") == nil then
+		model:SetAttribute("HitMaterial", "Armor") -- plate armor clank when hit (Combat.CombatAudio)
+	end
 	pcall(function()
 		root:SetNetworkOwner(nil)
 	end)
@@ -289,7 +295,8 @@ function SparringKnightService:Start()
 	PoiseService.Flinched:Connect(function(model: Model)
 		local knight = knights[model]
 		if knight and knight.state == "Idle" then
-			playAction(knight, "Flinch")
+			-- the directional hit reaction itself plays on every client (Combat.HitReactions, 2026-10-09);
+			-- here the AI only loses its next attack for the hitstun
 			knight.nextAttackAt = math.max(knight.nextAttackAt, os.clock() + CombatConfig.FlinchTime)
 		end
 	end)

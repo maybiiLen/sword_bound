@@ -46,6 +46,12 @@ QUICK HOW-TOS
   Read a player's level:      player:GetAttribute("ClassLevel") / ("Level_Sword") anywhere
 
 CHANGELOG  (newest first; one line per change, with your name)
+  2026-10-09  Henry  Hit feel round 3: enemies now react to every hit (directional light/heavy flinch clips,
+                     dummy rocks, mob tilt), slide back 1-2 studs per hit while you step in, Elite/Boss armor
+                     tiers (knight twitches but keeps attacking; bosses with [BOSS] never flinch from lights).
+                     New layered combat audio (Pro Sound Effects): varied whooshes timed to the hit, flesh/
+                     armor/wood hit layers, heavy layer, ducking, real rolloff. New modules Combat.HitReactions
+                     and Combat.CombatAudio. See Docs.Combat > HIT REACTIONS and COMBAT AUDIO. (via Claude)
   2026-10-09  Henry  Sword light combo is now 4 hits: forehand, backhand, overhead chop (lighter now), and a new
                      spinning finisher (Specs.Light4) that knocks enemies back. Both swords updated; Light3/Light4
                      animations published. See Docs.Combat > STATE MACHINE. (via Claude)
